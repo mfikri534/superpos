@@ -29,11 +29,16 @@
     const n = Number(value) || 0;
     return new Intl.NumberFormat('id-ID', { style: 'currency', currency: state.settings.currency || 'IDR', maximumFractionDigits: 0 }).format(n);
   }
-  function isoDate(date) { const d = new Date(date); return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`; }
+  function isoDate(date) {
+    const d = new Date(date);
+    const parts = new Intl.DateTimeFormat('en-CA', { timeZone:'Asia/Jakarta', year:'numeric', month:'2-digit', day:'2-digit' }).formatToParts(d);
+    const p = Object.fromEntries(parts.map(x => [x.type, x.value]));
+    return `${p.year}-${p.month}-${p.day}`;
+  }
   function esc(value) { return String(value == null ? '' : value).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
   function roleName(role) { return ({ owner:'Owner', admin:'Administrator', manager:'Manager', cashier:'Kasir' })[role] || role || '-'; }
   function canManage() { return ['owner','admin'].includes(state.user?.role); }
-  function canManageProducts() { return ['owner','admin','manager'].includes(state.user?.role); }
+  function canManageProducts() { return ['owner','admin'].includes(state.user?.role); }
   function canSeeReports() { return ['owner','admin','manager'].includes(state.user?.role); }
   function showToast(message, type = 'success') {
     const root = $('#toast-root'); if (!root) return;
@@ -43,7 +48,7 @@
   }
   function fmtDate(v, withTime = false) {
     if (!v) return '-'; const d = new Date(v); if (isNaN(d)) return String(v);
-    return new Intl.DateTimeFormat('id-ID', withTime ? { dateStyle:'medium', timeStyle:'short' } : { dateStyle:'medium' }).format(d);
+    return new Intl.DateTimeFormat('id-ID', withTime ? { dateStyle:'medium', timeStyle:'short', timeZone:'Asia/Jakarta' } : { dateStyle:'medium', timeZone:'Asia/Jakarta' }).format(d);
   }
   function icon(name, size = 18) { return `<i data-lucide="${name}" style="width:${size}px;height:${size}px"></i>`; }
   function refreshIcons() { if (window.lucide?.createIcons) window.lucide.createIcons(); }
@@ -178,21 +183,21 @@
     const nav = allowedNav();
     const pageTitle = nav.find(n => n.id === state.page)?.label || 'POS SuperApp';
     return `<div class="app-shell md:flex">
-      <aside class="hidden md:flex w-[232px] shrink-0 border-r border-slate-200 bg-white min-h-screen flex-col px-3 py-5 sticky top-0 h-screen">
+      <aside class="hidden md:flex w-[244px] shrink-0 border-r border-slate-200 bg-white min-h-screen flex-col px-3 py-5 sticky top-0 h-screen">
         <div class="flex items-center gap-3 px-2 mb-8"><div class="h-10 w-10 rounded-xl bg-mint border-2 border-ink shadow-hard grid place-items-center text-lg">▦</div><div class="min-w-0"><div class="font-extrabold leading-tight truncate">${esc(state.settings.store_name || 'POS SuperApp')}</div><div class="text-[10px] text-slate-500 font-bold tracking-widest">POS SUPERAPP</div></div></div>
         <div class="text-[10px] text-slate-400 font-extrabold uppercase tracking-widest px-3 mb-2">Workspace</div>
         <nav class="space-y-1 flex-1">${nav.map(n => `<button data-page="${n.id}" class="nav-item ${state.page===n.id?'active':''}">${icon(n.icon,17)}<span>${n.label}</span>${n.id==='pos'&&state.cart.length?`<span class="ml-auto pill bg-white">${cartQty()}</span>`:''}</button>`).join('')}</nav>
         <div class="border-t border-slate-200 pt-3 mt-3"><div class="flex items-center gap-2 px-2"><div class="h-9 w-9 rounded-xl bg-lavender grid place-items-center font-extrabold">${esc((state.user.full_name||'U').slice(0,1).toUpperCase())}</div><div class="min-w-0 flex-1"><div class="text-xs font-extrabold truncate">${esc(state.user.full_name)}</div><div class="text-[10px] text-slate-500">${roleName(state.user.role)}</div></div><button class="btn btn-ghost p-2" data-action="logout" title="Keluar">${icon('log-out',16)}</button></div></div>
       </aside>
       <div class="flex-1 min-w-0">
-        <header class="sticky top-0 z-30 h-[58px] bg-cream/95 backdrop-blur border-b border-slate-200 px-4 md:px-7 flex items-center justify-between gap-3">
-          <div class="min-w-0"><div class="font-extrabold text-base truncate">${esc(pageTitle)}</div><div class="text-[10px] text-slate-500 md:hidden truncate">${esc(state.settings.store_name || 'POS SuperApp')}</div></div>
+        <header class="app-topbar sticky top-0 z-30 h-[64px] md:h-[70px] bg-cream/95 backdrop-blur border-b border-slate-200 px-4 md:px-7 flex items-center justify-between gap-3">
+          <div class="min-w-0"><div class="font-extrabold text-base truncate">${esc(pageTitle)}</div><div class="topbar-store text-[10px] text-slate-500 md:hidden truncate">${esc(state.settings.store_name || 'POS SuperApp')}</div></div>
           <div class="flex items-center gap-2"><span class="pill ${state.online?'bg-mint':'bg-coral'} flex items-center gap-1">● ${state.online?'Online':'Offline'}</span><span class="hidden sm:inline pill ${state.shift?'bg-lemon':'bg-white border border-slate-200'}">${state.shift?'Shift aktif':'Shift belum dibuka'}</span><button class="btn p-2" data-action="open-shift" title="Shift">${icon('clock-3',16)}</button><button class="btn btn-dark p-2" data-page="ai" title="AI Copilot" ${!canSeeReports()?'disabled':''}>${icon('sparkles',16)}</button><button class="md:hidden btn p-2" data-action="more">${icon('menu',17)}</button></div>
         </header>
         <main class="app-main p-3 sm:p-5 md:p-7 max-w-[1600px] mx-auto">${renderPage()}</main>
       </div>
-      <nav class="md:hidden bottom-dock fixed z-40 bottom-0 inset-x-0 bg-white/95 backdrop-blur border-t border-slate-200 grid grid-cols-4 px-2">
-        ${[{id:'pos',label:'Kasir',icon:'shopping-bag'},{id:'products',label:'Produk',icon:'package'},{id:'reports',label:'Laporan',icon:'chart-no-axes-combined'},{id:'more',label:'Lainnya',icon:'grid-2x2'}].map(n=>`<button data-page="${n.id}" data-action="${n.id==='more'?'more':''}" class="flex flex-col items-center gap-1 py-1 text-[10px] font-extrabold ${state.page===n.id?'text-ink':'text-slate-400'}" ${n.id==='products'&&!canManage()?'disabled':''} ${n.id==='reports'&&!canSeeReports()?'disabled':''}>${icon(n.icon,19)}${n.label}</button>`).join('')}
+      <nav class="md:hidden bottom-dock fixed z-40 bottom-0 inset-x-0 bg-white/95 backdrop-blur border-t border-slate-200">
+        ${[{id:'pos',label:'Kasir',icon:'shopping-bag'},{id:'products',label:'Produk',icon:'package'},{id:'reports',label:'Laporan',icon:'chart-no-axes-combined'},{id:'more',label:'Lainnya',icon:'grid-2x2'}].map(n=>`<button data-page="${n.id}" data-action="${n.id==='more'?'more':''}" class="flex flex-col items-center gap-1 py-1 text-[10px] font-extrabold ${state.page===n.id?'text-ink':'text-slate-400'}" ${n.id==='products'&&!canManageProducts()?'disabled':''} ${n.id==='reports'&&!canSeeReports()?'disabled':''}>${icon(n.icon,19)}${n.label}</button>`).join('')}
       </nav>
       ${state.modal ? renderModal() : ''}
     </div>`;
@@ -215,7 +220,7 @@
       ['Transaksi',Number(d.transactions||0).toLocaleString('id-ID'),'receipt','bg-lemon'],
       ['Rata-rata Belanja',money(d.aov),'shopping-basket','bg-sky']
     ];
-    return `<div class="flex flex-wrap items-end justify-between gap-3 mb-5"><div><p class="text-xs text-slate-500 font-semibold">${fmtDate(new Date())}</p><h1 class="text-2xl font-extrabold mt-1">Ringkasan toko 👋</h1><p class="text-sm text-slate-500 mt-1">Pantau performa operasional hari ini.</p></div><button class="btn btn-primary" data-action="refresh-dashboard">${icon('refresh-cw',16)} Perbarui data</button></div>
+    return `<div class="page-heading"><div><p class="text-xs text-slate-500 font-semibold">${fmtDate(new Date())}</p><h1 class="mt-1">Ringkasan toko 👋</h1><p>Pantau performa operasional hari ini.</p></div><div class="page-actions"><button class="btn btn-primary" data-action="refresh-dashboard">${icon('refresh-cw',16)} Perbarui data</button></div></div>
       <div class="grid grid-cols-2 xl:grid-cols-4 gap-3">${stats.map(s=>`<div class="kpi"><div class="flex justify-between items-center"><span class="text-xs text-slate-500 font-bold">${s[0]}</span><span class="h-8 w-8 rounded-lg ${s[3]} grid place-items-center">${icon(s[2],16)}</span></div><div class="mono font-extrabold text-xl sm:text-2xl mt-4 break-words">${s[1]}</div><div class="text-[10px] text-slate-400 mt-1">Periode hari ini</div></div>`).join('')}</div>
       <div class="grid lg:grid-cols-[1.4fr_1fr] gap-4 mt-5">
         <section class="bento p-4"><div class="flex items-center justify-between mb-4"><div><h2 class="font-extrabold">Produk terlaris</h2><p class="text-xs text-slate-500">Berdasarkan jumlah item terjual hari ini</p></div>${icon('chart-column',20)}</div>
@@ -226,7 +231,7 @@
           <button class="btn w-full mt-3" data-page="inventory">Buka inventori ${icon('arrow-up-right',15)}</button>
         </section>
       </div>
-      <div class="grid sm:grid-cols-3 gap-3 mt-4"><button class="bento p-4 text-left hover:bg-mint" data-page="pos"><div class="text-xl">🛒</div><div class="font-extrabold mt-2">Mulai transaksi</div><div class="text-xs text-slate-500 mt-1">Buka layar kasir</div></button><button class="bento p-4 text-left hover:bg-lavender" data-page="reports"><div class="text-xl">📊</div><div class="font-extrabold mt-2">Analisis penjualan</div><div class="text-xs text-slate-500 mt-1">Lihat laporan detail</div></button><button class="bento p-4 text-left hover:bg-lemon" data-page="ai"><div class="text-xl">✨</div><div class="font-extrabold mt-2">Tanya AI Copilot</div><div class="text-xs text-slate-500 mt-1">Cari insight bisnis</div></button></div>`;
+      <div class="dashboard-quick-actions"><button class="bento p-4 text-left hover:bg-mint" data-page="pos"><div class="text-xl">🛒</div><div class="font-extrabold mt-2">Mulai transaksi</div><div class="text-xs text-slate-500 mt-1">Buka layar kasir</div></button><button class="bento p-4 text-left hover:bg-lavender" data-page="reports"><div class="text-xl">📊</div><div class="font-extrabold mt-2">Analisis penjualan</div><div class="text-xs text-slate-500 mt-1">Lihat laporan detail</div></button><button class="bento p-4 text-left hover:bg-lemon" data-page="ai"><div class="text-xl">✨</div><div class="font-extrabold mt-2">Tanya AI Copilot</div><div class="text-xs text-slate-500 mt-1">Cari insight bisnis</div></button></div>`;
   }
 
   function renderPos() {
@@ -260,12 +265,18 @@
 
   function renderProducts() {
     const products = state.catalog.products || [];
-    return `<div class="flex flex-wrap justify-between items-end gap-3 mb-4"><div><h1 class="text-2xl font-extrabold">Produk & katalog</h1><p class="text-sm text-slate-500 mt-1">Kelola harga, barcode, kategori, dan stok awal.</p></div><div class="flex gap-2"><button class="btn" data-action="add-category">${icon('folder-plus',16)} Kategori</button><button class="btn btn-primary" data-action="add-product">${icon('plus',16)} Tambah produk</button></div></div>
-      <div class="bento overflow-hidden"><div class="p-3 border-b border-slate-100 flex gap-2"><input id="products-filter" class="field" placeholder="Cari nama, SKU, barcode…"><span class="pill bg-lavender self-center">${products.length} produk</span></div><div id="products-rows">${products.length ? products.map(p=>productRow(p)).join('') : `<div class="p-10 text-center text-sm text-slate-400">Belum ada produk. Tambahkan produk pertama Anda.</div>`}</div></div>`;
+    return `<div class="page-heading"><div><h1>Produk & katalog</h1><p>Kelola harga, barcode, kategori, dan stok toko.</p></div><div class="page-actions products-heading-actions"><button class="btn" data-action="add-category">${icon('folder-plus',16)} Kategori</button><button class="btn btn-primary" data-action="add-product">${icon('plus',16)} Tambah produk</button></div></div>
+      <section class="bento overflow-hidden"><div class="p-3 sm:p-4 border-b border-slate-100 flex flex-col sm:flex-row gap-2 sm:items-center"><input id="products-filter" class="field" placeholder="Cari nama produk, SKU, atau barcode…"><span class="pill bg-lavender self-start sm:self-center">${products.length} produk</span></div><div id="products-rows" class="product-admin-grid">${products.length ? products.map(p=>productRow(p)).join('') : `<div class="col-span-full p-10 text-center text-sm text-slate-400">Belum ada produk. Tambahkan produk pertama Anda.</div>`}</div></section>`;
   }
   function productRow(p) {
-    const cat = state.catalog.categories.find(c=>c.category_id===p.category_id)?.name || 'Tanpa kategori';
-    return `<div class="table-row product-row" data-search="${esc([p.name,p.sku,p.barcode,cat].join(' ').toLowerCase())}"><div class="min-w-0"><div class="font-extrabold text-sm truncate">${esc(p.name)}</div><div class="mobile-sub text-[10px] text-slate-400 mt-1">${esc(p.sku||p.barcode||'Tanpa SKU')} · ${esc(cat)}</div><div class="desk-col text-xs text-slate-400 mt-1">${esc(p.barcode||'Tanpa barcode')} · ${esc(cat)}</div></div><div class="desk-col text-right"><div class="mono text-sm font-bold">${money(p.sell_price)}</div><div class="text-[10px] text-slate-400">Modal ${money(p.buy_price)}</div></div><div class="row-amount flex justify-end items-center gap-2"><div class="text-right"><div class="mono text-sm font-bold">${Number(p.stock)} ${esc(p.unit||'pcs')}</div><div class="text-[10px] text-slate-400">Stok</div></div><button class="btn p-2" data-edit-product="${esc(p.product_id)}">${icon('pencil',15)}</button></div></div>`;
+    const cat = state.catalog.categories.find(c=>String(c.category_id)===String(p.category_id))?.name || 'Tanpa kategori';
+    const stock = Number(p.stock || 0);
+    const low = stock <= Number(p.min_stock || 0);
+    const initials = String(p.name || 'P').trim().slice(0,1).toUpperCase();
+    return `<article class="product-admin-card product-row" data-search="${esc([p.name,p.sku,p.barcode,cat].join(' ').toLowerCase())}">
+      <div class="product-admin-head"><div class="product-tile ${low?'bg-coral':'bg-mint'}">${esc(initials)}</div><div class="min-w-0 flex-1"><div class="product-admin-name">${esc(p.name)}</div><div class="product-admin-meta">${esc(p.sku ? 'SKU '+p.sku : 'Tanpa SKU')} · ${esc(p.barcode || 'Tanpa barcode')}</div><div class="mt-2"><span class="pill ${low?'bg-coral':'bg-lavender'}">${esc(cat)}</span></div></div></div>
+      <div class="product-admin-foot"><div><div class="metric-label">Harga jual</div><div class="metric-value mono">${money(p.sell_price)}</div><div class="text-[10px] text-slate-400 mt-1">Modal ${money(p.buy_price)}</div></div><div><div class="metric-label">Stok tersedia</div><div class="metric-value mono">${stock} ${esc(p.unit||'pcs')}</div><div class="text-[10px] ${low?'text-rose-600':'text-slate-400'} mt-1">${low?'Stok perlu dicek':'Min. '+Number(p.min_stock||0)+' '+esc(p.unit||'pcs')}</div></div><button class="btn p-2" data-edit-product="${esc(p.product_id)}" aria-label="Edit ${esc(p.name)}">${icon('pencil',16)}</button></div>
+    </article>`;
   }
   function renderCustomers() {
     return `<div class="flex flex-wrap justify-between items-end gap-3 mb-4"><div><h1 class="text-2xl font-extrabold">Pelanggan</h1><p class="text-sm text-slate-500 mt-1">Database pelanggan, loyalitas, dan riwayat belanja.</p></div><button class="btn btn-primary" data-action="add-customer">${icon('user-plus',16)} Tambah pelanggan</button></div>
@@ -389,9 +400,6 @@
   function bindShell() {
     const root=$('#app');
     root.onclick=handleClick; root.onsubmit=handleSubmit; root.oninput=handleInput; root.onchange=handleChange;
-    if (state.page==='pos') {
-      $('#product-search')?.focus({preventScroll:true});
-    }
     if (state.page==='ai') { const chat=$('#ai-chat'); if(chat) chat.scrollTop=chat.scrollHeight; }
   }
   function handleClick(e) {
@@ -524,7 +532,8 @@
       if(!navigator.onLine) throw new Error('Tidak dapat terhubung ke server.');
       result=await api('checkout',payload);
       const trx=result.transaction;
-      const receiptItems=items.map(x=>{const p=productById(x.product_id);return {product_name:p?.name||'Produk',qty:x.qty,unit_price:Number(p?.sell_price||0),discount:x.discount,subtotal:x.qty*Number(p?.sell_price||0)-x.discount};});
+      if(result.duplicate){const detail=await api('transactions.get',{trx_id:trx.trx_id});result.items=detail.items;result.payments=detail.payments;result.outstanding=Math.max(0,Number(trx.grand_total)-receiptPaidAmount({transaction:trx,payments:detail.payments}));}
+      const receiptItems=result.items?.length?result.items:items.map(x=>{const p=productById(x.product_id);return {product_name:p?.name||'Produk',qty:x.qty,unit_price:Number(p?.sell_price||0),discount:x.discount,subtotal:x.qty*Number(p?.sell_price||0)-x.discount};});
       state.lastReceipt={transaction:trx,items:receiptItems,payments:result.payments||payments,outstanding:result.outstanding||0};
       state.cart=[];window._posDiscount=0;state.selectedCustomer=null;persistCart();
       await Promise.all([refreshCatalog().catch(()=>{}),refreshShift().catch(()=>{})]);
@@ -592,7 +601,7 @@
     try{state.customers=await api('customers.list');saveJson('pos_customers',state.customers);}catch(err){state.customers=readJson('pos_customers',[]);if(!state.customers.length)console.warn(err);}
   }
   async function loadDashboard(force=false) {
-    try{state.dashboard=await api('dashboard.summary',{});state.page='dashboard';render();}catch(err){showToast(err.message,'error');}
+    try{state.dashboard=await api('dashboard.summary',{force:!!force});state.page='dashboard';render();}catch(err){showToast(err.message,'error');}
   }
   async function loadExpenses() {state.expenses=await api('expenses.list',{from:state.reportFrom,to:state.reportTo});render();}
   async function loadUsers(){state.users=await api('users.list');render();}
@@ -672,8 +681,25 @@
     try{const res=await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(model)}:generateContent?key=${encodeURIComponent(key)}`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({contents:[{parts:[{text:'Reply exactly: POS Copilot connected.'}]}],generationConfig:{maxOutputTokens:20}})});const d=await res.json();if(!res.ok)throw new Error(d.error?.message||'API error');showToast('Koneksi Gemini berhasil.');}catch(err){showToast(err.message,'error');}
   }
 
+  function receiptPaidAmount(receipt) {
+    const entries = Array.isArray(receipt?.payments) ? receipt.payments : [];
+    if (entries.length) return entries.filter(p=>String(p.method||'').toLowerCase()!=='kasbon').reduce((sum,p)=>sum+Number(p.amount||0),0);
+    const t=receipt?.transaction||{};
+    try {
+      const notes=JSON.parse(t.notes||'{}');
+      if(notes.payment_amount_semantics==='gross_tendered') return Number(t.amount_paid||0);
+    } catch (_) {}
+    // Backward compatibility: previous versions stored the applied bill amount,
+    // while change_due already contained the cash returned to the customer.
+    return Number(t.amount_paid||0)+Number(t.change_due||0);
+  }
+  function receiptOutstanding(receipt) {
+    const t=receipt?.transaction||{};
+    if(Number(receipt?.outstanding||0)>0) return Number(receipt.outstanding);
+    return Math.max(0,Number(t.grand_total||0)-Math.min(Number(t.grand_total||0),receiptPaidAmount(receipt)));
+  }
   async function reprintReceipt(trxId) {
-    try{const data=await api('transactions.get',{trx_id:trxId});state.lastReceipt={transaction:data.transaction,items:data.items,payments:data.payments,outstanding:Math.max(0,Number(data.transaction.grand_total)-Number(data.transaction.amount_paid))};showReceiptActions(state.lastReceipt);}catch(err){showToast(err.message,'error');}
+    try{const data=await api('transactions.get',{trx_id:trxId});state.lastReceipt={transaction:data.transaction,items:data.items,payments:data.payments,outstanding:Math.max(0,Number(data.transaction.grand_total)-receiptPaidAmount({transaction:data.transaction,payments:data.payments}))};showReceiptActions(state.lastReceipt);}catch(err){showToast(err.message,'error');}
   }
   function showReceiptActions(receipt) {
     openModal('Transaksi berhasil', `<div class="rounded-xl bg-mint/60 p-4 text-center mb-4"><div class="text-3xl">✓</div><div class="font-extrabold text-lg mt-1">Pembayaran tercatat</div><div class="mono text-sm mt-1">${esc(receipt.transaction.invoice_no)}</div><div class="mono text-2xl font-extrabold mt-2">${money(receipt.transaction.grand_total)}</div></div><div class="grid grid-cols-2 gap-2"><button class="btn btn-primary" data-action="print-last-receipt">${icon('printer',16)} Cetak struk</button><button class="btn" data-action="share-last-receipt">${icon('message-circle',16)} WhatsApp</button><button class="btn col-span-2" data-action="close-modal">Selesai</button></div>`,{subtitle:'Struk dapat dicetak melalui printer Bluetooth atau browser.'});
@@ -683,13 +709,19 @@
     const moneyText=n=>new Intl.NumberFormat('id-ID',{maximumFractionDigits:0}).format(Number(n)||0);
     const out=[center(state.settings.store_name||'TOKO'),center(state.settings.store_address||''),center(state.settings.store_phone||''),line,`No: ${t.invoice_no}`,`Tgl: ${fmtDate(t.timestamp,true)}`,`Kasir: ${t.cashier_name||state.user.full_name}`,`Pelanggan: ${t.customer_name||'Umum'}`,line];
     (receipt.items||[]).forEach(i=>{out.push(String(i.product_name||'Item').slice(0,width));out.push(`${i.qty} x ${moneyText(i.unit_price)}${' '.repeat(Math.max(1,width-String(i.qty+' x '+moneyText(i.unit_price)).length-moneyText(i.subtotal).length))}${moneyText(i.subtotal)}`);});
-    out.push(line,`Subtotal: ${moneyText(t.subtotal)}`,`Diskon: ${moneyText(t.discount_amount)}`,`Pajak: ${moneyText(t.tax_amount)}`,`TOTAL: ${moneyText(t.grand_total)}`,`Dibayar: ${moneyText(t.amount_paid)}`,`Kembali: ${moneyText(t.change_due)}`,`Metode: ${t.payment_method}`);
-    if(receipt.outstanding>0)out.push(`Sisa Kasbon: ${moneyText(receipt.outstanding)}`);
+    out.push(line,`Subtotal: ${moneyText(t.subtotal)}`);
+    if(Number(t.discount_amount||0)>0)out.push(`Diskon: ${moneyText(t.discount_amount)}`);
+    if(Number(t.tax_amount||0)>0)out.push(`Pajak: ${moneyText(t.tax_amount)}`);
+    out.push(`TOTAL: ${moneyText(t.grand_total)}`,`Dibayar: ${moneyText(receiptPaidAmount(receipt))}`,`Kembali: ${moneyText(t.change_due)}`,`Metode: ${t.payment_method}`);
+    const outstanding=receiptOutstanding(receipt);if(outstanding>0)out.push(`Sisa Kasbon: ${moneyText(outstanding)}`);
     out.push(line,center(state.settings.receipt_footer||'Terima kasih!'),'','');return out.join('\n');
   }
   function browserPrintReceipt(receipt) {
     const t=receipt.transaction;const rows=(receipt.items||[]).map(i=>`<tr><td>${esc(i.product_name)}<small>${i.qty} × ${money(i.unit_price)}</small></td><td>${money(i.subtotal)}</td></tr>`).join('');
-    const html=`<!doctype html><html><head><meta charset="utf-8"><title>Struk ${esc(t.invoice_no)}</title><style>body{font:12px Arial,sans-serif;width:${Number(state.settings.printer_width||58)===80?'72mm':'52mm'};margin:0 auto;color:#111}h2,p{text-align:center;margin:4px 0}hr{border:0;border-top:1px dashed #333;margin:8px 0}table{width:100%;font-size:11px;border-collapse:collapse}td{padding:4px 0;vertical-align:top}td:last-child{text-align:right;white-space:nowrap}small{display:block;color:#555;margin-top:2px}.tot td{font-weight:bold}</style></head><body><h2>${esc(state.settings.store_name||'TOKO')}</h2><p>${esc(state.settings.store_address||'')}</p><p>${esc(state.settings.store_phone||'')}</p><hr><div>No: ${esc(t.invoice_no)}</div><div>${fmtDate(t.timestamp,true)}</div><div>Kasir: ${esc(t.cashier_name||'')}</div><div>Pelanggan: ${esc(t.customer_name||'Umum')}</div><hr><table>${rows}</table><hr><table><tr><td>Subtotal</td><td>${money(t.subtotal)}</td></tr><tr><td>Diskon</td><td>${money(t.discount_amount)}</td></tr><tr><td>Pajak</td><td>${money(t.tax_amount)}</td></tr><tr class="tot"><td>TOTAL</td><td>${money(t.grand_total)}</td></tr><tr><td>Dibayar</td><td>${money(t.amount_paid)}</td></tr><tr><td>Kembali</td><td>${money(t.change_due)}</td></tr></table><hr><p>${esc(state.settings.receipt_footer||'Terima kasih!')}</p><script>window.onload=()=>{window.print();setTimeout(()=>window.close(),500)};<\/script></body></html>`;
+    const discountRow=Number(t.discount_amount||0)>0?`<tr><td>Diskon</td><td>${money(t.discount_amount)}</td></tr>`:'';
+    const taxRow=Number(t.tax_amount||0)>0?`<tr><td>Pajak</td><td>${money(t.tax_amount)}</td></tr>`:'';
+    const paid=receiptPaidAmount(receipt);const outstanding=receiptOutstanding(receipt);
+    const html=`<!doctype html><html><head><meta charset="utf-8"><title>Struk ${esc(t.invoice_no)}</title><style>*{box-sizing:border-box}body{font:12px Arial,sans-serif;width:${Number(state.settings.printer_width||58)===80?'72mm':'52mm'};margin:0 auto;color:#111;padding:2mm}h2,p{text-align:center;margin:4px 0}hr{border:0;border-top:1px dashed #333;margin:8px 0}table{width:100%;font-size:11px;border-collapse:collapse}td{padding:4px 0;vertical-align:top}td:last-child{text-align:right;white-space:nowrap}small{display:block;color:#555;margin-top:2px}.tot td{font-weight:bold}</style></head><body><h2>${esc(state.settings.store_name||'TOKO')}</h2><p>${esc(state.settings.store_address||'')}</p><p>${esc(state.settings.store_phone||'')}</p><hr><div>No: ${esc(t.invoice_no)}</div><div>${fmtDate(t.timestamp,true)}</div><div>Kasir: ${esc(t.cashier_name||'')}</div><div>Pelanggan: ${esc(t.customer_name||'Umum')}</div><hr><table>${rows}</table><hr><table><tr><td>Subtotal</td><td>${money(t.subtotal)}</td></tr>${discountRow}${taxRow}<tr class="tot"><td>TOTAL</td><td>${money(t.grand_total)}</td></tr><tr><td>Dibayar</td><td>${money(paid)}</td></tr><tr><td>Kembali</td><td>${money(t.change_due)}</td></tr><tr><td>Metode</td><td>${esc(t.payment_method||'')}</td></tr>${outstanding>0?`<tr><td>Sisa Kasbon</td><td>${money(outstanding)}</td></tr>`:''}</table><hr><p>${esc(state.settings.receipt_footer||'Terima kasih!')}</p><script>window.onload=()=>{window.print();setTimeout(()=>window.close(),500)};<\/script></body></html>`;
     const w=window.open('','_blank','width=420,height=700');if(!w)return showToast('Pop-up diblokir. Izinkan pop-up untuk cetak struk.','warning');w.document.open();w.document.write(html);w.document.close();
   }
   async function printLastReceipt() {
@@ -774,7 +806,7 @@
     window.addEventListener('online',()=>{state.online=true;render();syncOutbox();});
     window.addEventListener('offline',()=>{state.online=false;render();showToast('Koneksi terputus. Checkout akan masuk antrean offline.','warning');});
     window.addEventListener('focus',()=>{if(navigator.onLine)syncOutbox();});
-    if('serviceWorker' in navigator){navigator.serviceWorker.register('/sw.js').catch(err=>console.warn('Service worker:',err));}
+    if('serviceWorker' in navigator){navigator.serviceWorker.register('/sw.js').then(reg=>reg.update()).catch(err=>console.warn('Service worker:',err));}
     if(state.token&&state.user){
       if(!navigator.onLine){state.page='pos';render();showToast('Mode offline aktif. Transaksi akan masuk antrean.','warning');return;}
       try{await loadBootstrap();await loadCustomers();render();syncOutbox();}

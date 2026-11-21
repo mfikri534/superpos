@@ -1,35 +1,75 @@
-# POS SuperApp — Catatan Audit & Perbaikan v1.0.1
+# POS SuperApp — Laporan Audit & Perbaikan v1.2.0
 
-## Perbaikan pada versi ini
+## Ringkasan masalah dari screenshot
 
-1. **Konten bawah pada smartphone** — tinggi minimum mengikuti `100dvh`/`100svh`; konten utama diberi padding bawah untuk dock navigasi dan safe-area; dock, tombol POS sticky, dan toast ditempatkan agar tidak menutupi konten.
-2. **Modal tanggal/kategori/pilihan** — modal tidak lagi ditutup oleh klik apa pun yang berasal dari dalam sheet. Modal hanya ditutup jika target klik adalah backdrop itu sendiri, tombol tutup, atau tombol Escape.
-3. **Input Gemini API Key** — field form tetap aktif saat diklik/diketik; perubahan key hanya disimpan saat form dikirim. Key tetap berada di localStorage browser dan tidak dikirim ke spreadsheet/backend GAS.
-4. **Shift & kas** — rumus kas diharapkan membedakan payment entry lama (nominal bersih) dan payment entry baru (nominal tunai sebelum kembalian). Transaksi baru mengurangi nilai kembalian tepat satu kali.
-5. **Konsistensi mutasi** — penyimpanan produk/stok dan kas masuk/keluar menggunakan ScriptLock sehingga tidak bertabrakan dengan checkout atau penutupan shift.
-6. **PWA cache** — versi cache dinaikkan menjadi `pos-superapp-v2` untuk memaksa aset baru diunduh setelah deployment frontend.
-7. **Database** — konstanta `DB_ID` manual tetap dipertahankan sesuai Spreadsheet ID yang diberikan.
+1. Konten dashboard dan halaman lain berada di belakang dock navigasi bawah pada smartphone.
+2. Kartu/list produk pada layar kecil terlalu rapat dan kurang jelas; tampilan desktop juga membutuhkan hierarki katalog yang lebih teratur.
+3. Struk menampilkan nominal dibayar sebesar tagihan, bukan uang tunai yang benar-benar diterima; baris diskon/pajak nol tidak dibutuhkan.
+4. Dashboard, laporan, dan riwayat tidak menemukan transaksi yang tanggalnya telah dikonversi Google Sheets menjadi nilai `Date`.
 
-## Pemeriksaan yang berhasil
+## Perubahan versi 1.2.0
 
-- `node --check` pada `app.js`, `Code.gs` (sebagai JavaScript), dan `sw.js`.
+### UI/UX responsif
+
+- Konten utama sekarang menggunakan selector berprioritas lebih tinggi agar padding bawah tidak ditimpa utility Tailwind.
+- Ruang bawah mobile ditambah untuk dock navigasi dan safe area; tinggi konten mengikuti viewport dinamis.
+- Dock bawah diberi tinggi dan target sentuh yang lebih nyaman.
+- Halaman Produk menggunakan kartu katalog responsif: informasi nama, SKU/barcode, kategori, harga modal/jual, stok, batas minimum, dan tombol edit memiliki pemisahan visual yang jelas.
+- Layout kartu produk menyesuaikan layar kecil, tablet, dan desktop.
+- Navigasi Produk diselaraskan dengan RBAC Owner/Admin; endpoint backend juga menolak penyimpanan produk oleh Manager agar frontend dan backend konsisten.
+
+### Transaksi dan struk
+
+- `Transactions.amount_paid` menyimpan jumlah uang yang diterima sebelum kembalian, bukan dibatasi pada nilai tagihan.
+- Struk Browser Print dan ESC/POS menggunakan total payment entries (selain Kasbon) untuk menampilkan uang diterima.
+- Kompatibilitas data lama dipertahankan: jika payment entries tidak tersedia, helper memakai catatan semantik pembayaran atau `amount_paid + change_due`.
+- Baris Diskon dan Pajak hanya ditampilkan jika nilainya lebih besar dari nol.
+- Pemeriksaan `client_ref` memakai parse JSON dan pencocokan exact equality, bukan substring, agar retry tidak membuat transaksi ganda.
+- Kembalian dikurangi tepat satu kali pada perhitungan kas shift; uang diterima tetap tercatat penuh dalam Payment_Entries.
+
+### Konsistensi tanggal dan laporan
+
+- Zona waktu aplikasi diseragamkan ke `Asia/Jakarta` pada GAS dan frontend.
+- `dateKey_()` menormalisasi objek Date Google Sheets, ISO date/timestamp, `yyyy-MM-dd`, dan teks tanggal lokal `dd/MM/yyyy`.
+- `readObjects_()` menormalkan `date_str` serta kolom timestamp sebelum filtering/sorting.
+- Dashboard, laporan penjualan, riwayat transaksi, dan daftar pengeluaran memakai normalisasi tanggal yang sama.
+- Cache dashboard/katalog diberi namespace versi baru; tombol Perbarui Data mengirim `force:true` untuk mengosongkan cache dashboard sebelum membaca ulang.
+- Status transaksi paid menerima variasi status umum (paid/completed/lunas/success/settled) tanpa memasukkan status batal.
+
+### PWA/deployment
+
+- Service Worker menggunakan cache `pos-superapp-v4`.
+- HTML dan JavaScript memakai strategi network-first, dengan cache sebagai fallback saat offline, agar perbaikan dari Vercel tidak tertahan oleh JavaScript lama.
+- Registrasi frontend memicu pemeriksaan pembaruan Service Worker.
+- Header Vercel digabung dalam satu rule dan aset menggunakan `max-age=0, must-revalidate`.
+
+## Hasil pengujian yang dilakukan
+
+Pengujian dilakukan dengan mock Google Sheets dan layanan Apps Script di Node.js; ini bukan koneksi ke spreadsheet produksi pengguna.
+
+- `node --check` pada `app.js`, `Code.gs` (diperiksa sebagai JavaScript), dan `sw.js`.
 - Parse JSON pada `vercel.json` dan `manifest.json`.
-- Parse script inline pada `index.html`.
-- Pemeriksaan referensi aset lokal yang digunakan `index.html`.
-- Pemeriksaan ID form terhadap handler submit.
-- Pemeriksaan setiap pemanggilan API frontend terhadap endpoint backend.
-- Pemeriksaan source untuk memastikan pola lama `data-stop-click` sudah tidak digunakan.
-- Uji fungsi perhitungan kas dengan data simulasi: transaksi baru dengan kembalian, transaksi historis bersih, dan gabungan keduanya. Semua hasil cocok dengan nilai kas yang diharapkan.
+- Pemeriksaan 28 endpoint API frontend terhadap router backend (termasuk auth logout yang ditangani langsung oleh `doPost`).
+- Pemeriksaan ID form terhadap handler submit (form kamera manual ditangani handler khusus).
+- Simulasi transaksi dengan tanggal Google Sheets bertipe `Date`: Dashboard, Laporan, dan Riwayat berhasil menemukan transaksi.
+- Simulasi nilai tanggal Indonesia `21/11/2026` berhasil dinormalisasi.
+- Simulasi transaksi Rp3.000 dengan uang tunai diterima Rp5.000: amount paid Rp5.000, change Rp2.000, stok turun satu kali.
+- Simulasi retry dengan `client_ref` sama tidak membuat transaksi kedua dan stok tidak dikurangi ulang.
+- Simulasi kas shift: modal awal Rp10.000 + tunai diterima Rp5.000 − kembalian Rp2.000 = kas diharapkan Rp13.000.
+- Uji helper struk: menampilkan `Dibayar: 5.000`, `Kembali: 2.000`, dan tidak menampilkan Diskon/Pajak ketika nol.
+- Validasi file lokal yang dirujuk `index.html` dan integritas arsip ZIP.
 
 ## Batas verifikasi
 
-Pemeriksaan ini merupakan audit source code dan pengujian logika terisolasi. Belum dilakukan transaksi langsung pada Google Spreadsheet milik pengguna, deployment pada project Vercel pengguna, uji perangkat Android/iOS fisik, kamera, Bluetooth printer, atau permintaan live ke Gemini API. Faktor-faktor tersebut bergantung pada izin akun, browser, perangkat, konfigurasi deployment, dan API key. Karena itu, hasil pemeriksaan source tidak dapat dijadikan jaminan mutlak bahwa tidak ada error pada semua perangkat atau kondisi produksi.
+Audit source dan pengujian logika terisolasi telah dilakukan. Saya belum dapat menguji langsung Spreadsheet/Apps Script deployment milik pengguna, browser pada ponsel fisik, printer BLE tertentu, kamera perangkat, koneksi Gemini real, atau akun Vercel pengguna. Keberhasilan fungsi tersebut juga bergantung pada izin, zona waktu spreadsheet, browser, model printer, dan konfigurasi deployment. Karena itu, hasil ini bukan jaminan mutlak bahwa semua kondisi produksi bebas error.
 
-## File yang berubah
+## File produksi
 
+- `Code.gs`
 - `index.html`
 - `app.js`
-- `Code.gs`
-- `sw.js`
-- `README.md`
 - `vercel.json`
+- `manifest.json`
+- `sw.js`
+- `icon.svg`
+- `README.md`

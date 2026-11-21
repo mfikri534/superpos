@@ -1,6 +1,6 @@
 # POS SuperApp — GAS + Google Sheets + Vercel
 
-Aplikasi POS mobile-first berbasis Vanilla JavaScript, Google Apps Script Web App, dan Google Sheets. Frontend bersifat static/PWA sehingga dapat di-host pada Vercel tanpa proses build.
+Aplikasi POS mobile-first versi 1.2.0 berbasis Vanilla JavaScript, Google Apps Script Web App, dan Google Sheets. Frontend bersifat static/PWA sehingga dapat di-host pada Vercel tanpa proses build.
 
 ## Isi project
 
@@ -12,8 +12,8 @@ Aplikasi POS mobile-first berbasis Vanilla JavaScript, Google Apps Script Web Ap
 
 ## A. Menyiapkan backend Google Apps Script
 
-1. Buat sebuah Google Spreadsheet kosong, misalnya `POS SuperApp Database`.
-2. Dari spreadsheet, buka **Extensions → Apps Script**.
+1. Buka Google Spreadsheet database yang ID-nya tercantum pada konstanta `DB_ID` di `Code.gs`. Jangan membuat spreadsheet baru jika Anda ingin melanjutkan database POS yang saat ini digunakan.
+2. Dari spreadsheet tersebut, buka **Extensions → Apps Script**.
 3. Salin isi `Code.gs` ke file `Code.gs` pada editor Apps Script, lalu simpan.
 4. Pastikan konstanta `DB_ID` di bagian atas `Code.gs` sudah berisi ID spreadsheet database yang benar. Jalankan fungsi `setupDatabase`, lalu setujui izin. Fungsi ini membuat tab dan header langsung pada spreadsheet dengan ID tersebut. ID database tidak lagi dibaca dari Script Properties atau spreadsheet aktif.
 5. Buka **Project Settings → Script Properties**, tambahkan properti berikut untuk membuat akun owner awal:
@@ -76,7 +76,7 @@ Versi perbaikan ini mencakup:
 - Modal hanya ditutup saat area backdrop yang kosong benar-benar diketuk, tombol tutup ditekan, atau tombol Escape digunakan. Interaksi dengan input, tanggal, select, dan formulir di dalam modal tidak menutup modal.
 - Perhitungan kas shift membedakan data pembayaran lama (nominal bersih) dari data baru (nominal tunai diterima sebelum kembalian).
 - Pengubahan stok dari form produk menggunakan ScriptLock dan dicatat pada Stock_Movements.
-- Cache Service Worker dinaikkan ke `pos-superapp-v2` dan aset Vercel menggunakan revalidasi agar browser tidak menyimpan `app.js` versi lama selama satu tahun.
+- Service Worker menggunakan cache `pos-superapp-v4` dan strategi network-first untuk HTML/JavaScript agar browser mengambil perbaikan Vercel lebih dulu; cache menjadi fallback ketika perangkat offline.
 
 ## F. Catatan penting sebelum produksi
 
@@ -95,3 +95,11 @@ Versi perbaikan ini mencakup:
 - **Katalog kosong:** buat kategori dan produk melalui menu Produk.
 - **Printer tidak ditemukan:** pastikan printer mendukung BLE GATT, aktifkan Bluetooth, izinkan akses perangkat, lalu uji Browser Print. Periksa UUID service/characteristic printer bila berbeda dari UUID generik yang dicoba aplikasi.
 - **Transaksi offline belum tersinkron:** hubungkan internet, buka ulang aplikasi, pastikan sesi login masih berlaku, dan periksa pesan sinkronisasi.
+
+
+## Pembaruan versi 1.2.0
+
+- Setelah mengganti `Code.gs`, lakukan **Deploy → Manage deployments → Edit → New version → Deploy**. URL `/exec` tetap sama bila deployment yang sama diperbarui.
+- Jalankan `setupDatabase()` kembali satu kali untuk memastikan tab tambahan (misalnya `Payment_Entries`, `Cash_Movements`, dan `Customer_Debts`) sudah ada. Tab yang header-nya sudah sesuai tidak dihapus atau dikosongkan. Jangan jalankan bila Anda telah mengubah header secara manual tanpa memeriksa skemanya terlebih dahulu.
+- Unggah ulang seluruh file frontend dan deploy ulang ke Vercel. Service Worker memakai cache `pos-superapp-v4` dan mengambil HTML/JavaScript terbaru dari jaringan terlebih dahulu; cache hanya menjadi fallback offline.
+- Waktu operasional dan filter tanggal aplikasi menggunakan zona `Asia/Jakarta`. Data tanggal lama yang disimpan Sheets sebagai objek Date atau teks `dd/MM/yyyy` dinormalisasi saat dibaca.

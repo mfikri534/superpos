@@ -9,7 +9,8 @@ const DB_ID = '1dPOeQ_Pgavzwj_Tz9IAQEJ22jTliEIVKeRAwUZgg3_o';
 
 const APP = {
   NAME: 'POS SuperApp',
-  VERSION: '1.0.1',
+  VERSION: '1.2.0',
+  TIME_ZONE: 'Asia/Jakarta',
   SESSION_TTL: 21600,
   CACHE_TTL: 120,
   ROLES: ['owner', 'admin', 'manager', 'cashier'],
@@ -73,10 +74,30 @@ function json_(obj) {
 function safeError_(err) { return err && err.message ? String(err.message) : 'Terjadi kesalahan pada server.'; }
 function uuid_() { return Utilities.getUuid(); }
 function nowIso_() { return new Date().toISOString(); }
-function dateStr_(d) { return Utilities.formatDate(d || new Date(), Session.getScriptTimeZone() || 'Asia/Jakarta', 'yyyy-MM-dd'); }
+function dateStr_(d) { return Utilities.formatDate(d || new Date(), APP.TIME_ZONE, 'yyyy-MM-dd'); }
+function dateKey_(value) {
+  if (value === null || value === undefined || value === '') return '';
+  if (value instanceof Date && !isNaN(value.getTime())) return Utilities.formatDate(value, APP.TIME_ZONE, 'yyyy-MM-dd');
+  const raw = String(value).trim();
+  if (/^\d{4}-\d{2}-\d{2}$/.test(raw)) return raw;
+  // Indonesian Sheets locales can leave a date-only cell as dd/MM/yyyy text.
+  const localDate = /^(\d{1,2})[\/.-](\d{1,2})[\/.-](\d{4})$/.exec(raw);
+  if (localDate) return localDate[3] + '-' + ('0' + localDate[2]).slice(-2) + '-' + ('0' + localDate[1]).slice(-2);
+  if (/^\d{4}-\d{2}-\d{2}T/.test(raw)) {
+    const parsed = new Date(raw);
+    return isNaN(parsed.getTime()) ? raw.slice(0, 10) : Utilities.formatDate(parsed, APP.TIME_ZONE, 'yyyy-MM-dd');
+  }
+  const parsed = new Date(raw);
+  return isNaN(parsed.getTime()) ? raw.slice(0, 10) : Utilities.formatDate(parsed, APP.TIME_ZONE, 'yyyy-MM-dd');
+}
+function isoTimestampCell_(value) {
+  if (value instanceof Date && !isNaN(value.getTime())) return value.toISOString();
+  return value;
+}
 function num_(v, fallback) { const n = Number(v); return isFinite(n) ? n : (fallback || 0); }
 function text_(v, max) { const s = String(v == null ? '' : v).trim(); return max ? s.substring(0, max) : s; }
 function bool_(v) { return v === true || String(v).toLowerCase() === 'true' || String(v) === '1'; }
+function isPaidStatus_(value) { return ['paid','completed','complete','lunas','success','settled'].includes(String(value || '').trim().toLowerCase()); }
 function hash_(s) { return Utilities.computeDigest(Utilities.DigestAlgorithm.SHA_256, String(s), Utilities.Charset.UTF_8).map(b => ('0' + ((b + 256) % 256).toString(16)).slice(-2)).join(''); }
 
 function getDb_() {
@@ -149,11 +170,22 @@ function setSetting_(key, value) {
   sh.appendRow([key, String(value)]);
 }
 function readObjects_(sheet) {
+  if (!sheet) throw new Error('Tab database tidak ditemukan. Jalankan setupDatabase() dan periksa nama tab.');
   const values = sheet.getDataRange().getValues();
   if (values.length < 2) return [];
   const headers = values[0].map(String);
+  const dateTimeFields = new Set(['timestamp','opened_at','closed_at','created_at','updated_at','last_login']);
   return values.slice(1).filter(r => r.some(v => v !== '' && v !== null)).map(row => {
-    const o = {}; headers.forEach((h, i) => o[h] = row[i]); return o;
+    const o = {};
+    headers.forEach((h, i) => {
+      let value = row[i];
+      // Sheets may silently coerce ISO date-only strings to Date objects.
+      // Normalize all date-only keys before filtering so old and new rows match.
+      if (h === 'date_str' && value !== '' && value !== null) value = dateKey_(value);
+      else if (dateTimeFields.has(h)) value = isoTimestampCell_(value);
+      o[h] = value;
+    });
+    return o;
   });
 }
 function appendObject_(sheetName, obj) {
@@ -174,7 +206,7 @@ function updateById_(sheetName, idField, id, patch) {
   return false;
 }
 function findBy_(sheetName, field, value) { return readObjects_(getDb_().getSheetByName(sheetName)).find(r => String(r[field]) === String(value)) || null; }
-function invalidateCache_() { const c = CacheService.getScriptCache(); ['catalog','dashboard'].forEach(k => c.remove(k)); }
+function invalidateCache_() { const c = CacheService.getScriptCache(); ['catalog','dashboard','catalog_v110','dashboard_v110','catalog_v111','dashboard_v111','catalog_v120','dashboard_v120'].forEach(k => c.remove(k)); }
 function cachedJson_(key, fn, ttl) {
   const c = CacheService.getScriptCache(); const hit = c.get(key);
   if (hit) { try { return JSON.parse(hit); } catch (_) {} }
@@ -240,7 +272,7 @@ function route_(action, d, u) {
     case 'bootstrap': return bootstrapData_(u);
     case 'dashboard.summary': requireRole_(u, ['owner','admin','manager']); return dashboardSummary_(d);
     case 'catalog.list': return getCatalog_();
-    case 'products.save': requireRole_(u, ['owner','admin','manager']); return saveProduct_(d, u);
+    case 'products.save': requireRole_(u, ['owner','admin']); return saveProduct_(d, u);
     case 'products.delete': requireRole_(u, ['owner','admin']); return deactivate_('Products','product_id',d.id);
     case 'categories.save': requireRole_(u, ['owner','admin']); return saveCategory_(d);
     case 'customers.list': return listCustomers_(d);
@@ -284,17 +316,17 @@ function saveSettings_(data) {
   invalidateCache_(); return getSettings_();
 }
 function getCatalog_() {
-  return cachedJson_('catalog', () => ({
+  return cachedJson_('catalog_v120', () => ({
     categories: readObjects_(getDb_().getSheetByName('Categories')).filter(r => bool_(r.is_active)),
     products: readObjects_(getDb_().getSheetByName('Products')).filter(r => bool_(r.is_active))
   }), APP.CACHE_TTL);
 }
 function dashboardSummary_(filters) {
-  return cachedJson_('dashboard', () => {
+  const buildSummary = () => {
     const today = dateStr_();
-    const tx = readObjects_(getDb_().getSheetByName('Transactions')).filter(t => t.date_str === today && t.status === 'paid');
+    const tx = readObjects_(getDb_().getSheetByName('Transactions')).filter(t => dateKey_(t.date_str) === today && isPaidStatus_(t.status));
     const products = readObjects_(getDb_().getSheetByName('Products')).filter(p => bool_(p.is_active));
-    const expenses = readObjects_(getDb_().getSheetByName('Expenses')).filter(e => e.date_str === today).reduce((s,e) => s + num_(e.amount), 0);
+    const expenses = readObjects_(getDb_().getSheetByName('Expenses')).filter(e => dateKey_(e.date_str) === today).reduce((s,e) => s + num_(e.amount), 0);
     const lowStock = products.filter(p => num_(p.stock) <= num_(p.min_stock)).slice(0, 8).map(p => ({ product_id:p.product_id, name:p.name, stock:num_(p.stock), min_stock:num_(p.min_stock), unit:p.unit }));
     const items = readObjects_(getDb_().getSheetByName('Transaction_Items'));
     const map = {};
@@ -303,7 +335,9 @@ function dashboardSummary_(filters) {
     const revenue = tx.reduce((s,t) => s + num_(t.grand_total), 0);
     const profit = tx.reduce((s,t) => s + items.filter(i => i.trx_id === t.trx_id).reduce((a,i) => a + num_(i.profit), 0), 0) - expenses;
     return { date:today, revenue, net_profit:profit, transactions:tx.length, aov:tx.length ? revenue/tx.length : 0, products:products.length, low_stock:lowStock, top_products:topProducts, expenses };
-  }, 45);
+  };
+  if (filters && bool_(filters.force)) CacheService.getScriptCache().remove('dashboard_v120');
+  return cachedJson_('dashboard_v120', buildSummary, 45);
 }
 function saveProduct_(d,u) {
   const lock = LockService.getScriptLock(); lock.waitLock(15000);
@@ -359,8 +393,8 @@ function saveUser_(d) {
   return publicUser_(item);
 }
 function listExpenses_(d) {
-  const from = text_(d.from,10); const to = text_(d.to,10);
-  return readObjects_(getDb_().getSheetByName('Expenses')).filter(e => (!from || e.date_str >= from) && (!to || e.date_str <= to)).sort((a,b) => String(b.date_str).localeCompare(String(a.date_str))).slice(0,1000);
+  const from = dateKey_(d.from); const to = dateKey_(d.to);
+  return readObjects_(getDb_().getSheetByName('Expenses')).filter(e => (!from || dateKey_(e.date_str) >= from) && (!to || dateKey_(e.date_str) <= to)).sort((a,b) => String(b.date_str).localeCompare(String(a.date_str))).slice(0,1000);
 }
 function saveExpense_(d,u) {
   const lock = LockService.getScriptLock(); lock.waitLock(10000);
@@ -393,7 +427,7 @@ function checkout_(d,u) {
   try {
     const clientRef = text_(d.client_ref,100);
     if (clientRef) {
-      const existing = readObjects_(getDb_().getSheetByName('Transactions')).find(t => String(t.notes || '').indexOf('"client_ref":"' + clientRef + '"') >= 0);
+      const existing = readObjects_(getDb_().getSheetByName('Transactions')).find(t => { try { return String(JSON.parse(t.notes || '{}').client_ref || '') === clientRef; } catch (_) { return false; } });
       if (existing) return { transaction:existing, duplicate:true };
     }
     const lines = Array.isArray(d.items) ? d.items : []; if (!lines.length) throw new Error('Keranjang masih kosong.');
@@ -427,7 +461,7 @@ function checkout_(d,u) {
     if (dueFromPayment > 0 && Math.abs(dueFromPayment - outstanding) > 1) throw new Error('Nominal Kasbon harus sama dengan sisa tagihan.');
     if (outstanding > 0 && !dueFromPayment) throw new Error('Sisa tagihan belum dialokasikan sebagai Kasbon.');
     const now = nowIso_(); const date = dateStr_(new Date()); const trxId = uuid_();
-    const invoice = 'INV-' + Utilities.formatDate(new Date(), Session.getScriptTimeZone() || 'Asia/Jakarta', 'yyMMdd-HHmmss') + '-' + Math.floor(100 + Math.random()*900);
+    const invoice = 'INV-' + Utilities.formatDate(new Date(), APP.TIME_ZONE, 'yyMMdd-HHmmss') + '-' + Math.floor(100 + Math.random()*900);
     const shift = currentShift_(u);
     if (String(u.role).toLowerCase() === 'cashier' && !shift) throw new Error('Buka shift terlebih dahulu sebelum checkout.');
     const shiftId = shift ? shift.shift_id : '';
@@ -435,11 +469,14 @@ function checkout_(d,u) {
     const paymentMethods = receivedEntries.map(p => p.method);
     if (outstanding > 0) paymentMethods.push('Kasbon');
     const paymentSummary = paymentMethods.filter((v,i,a) => a.indexOf(v) === i).join(' + ') || 'Tunai';
-    const notes = JSON.stringify({ client_ref:clientRef, shift_id:shiftId, payment_breakdown:payments, cashier_note:text_(d.notes,300) });
-    appendObject_('Transactions',{ trx_id:trxId, invoice_no:invoice, timestamp:now, date_str:date, customer_id:customer ? customer.customer_id : '', customer_name:customer ? customer.name : 'Pelanggan Umum', cashier_id:u.user_id, cashier_name:u.full_name, subtotal:grossSubtotal, discount_amount:trxDiscount + lineDiscountTotal, tax_amount:taxAmount, grand_total:grandTotal, payment_method:paymentSummary, amount_paid:Math.min(received,grandTotal), change_due:change, status:'paid', notes });
-    computed.forEach(x => {
+    const notes = JSON.stringify({ client_ref:clientRef, shift_id:shiftId, payment_breakdown:payments, payment_amount_semantics:'gross_tendered', cashier_note:text_(d.notes,300) });
+    appendObject_('Transactions',{ trx_id:trxId, invoice_no:invoice, timestamp:now, date_str:date, customer_id:customer ? customer.customer_id : '', customer_name:customer ? customer.name : 'Pelanggan Umum', cashier_id:u.user_id, cashier_name:u.full_name, subtotal:grossSubtotal, discount_amount:trxDiscount + lineDiscountTotal, tax_amount:taxAmount, grand_total:grandTotal, payment_method:paymentSummary, amount_paid:received, change_due:change, status:'paid', notes });
+    const savedItems = computed.map(x => {
       const lineTax = x.lineTax * discountRatio; const lineTotal = x.lineSub * discountRatio + lineTax;
-      appendObject_('Transaction_Items',{ item_id:uuid_(), trx_id:trxId, product_id:x.p.product_id, barcode:x.p.barcode, product_name:x.p.name, qty:x.qty, unit_price:num_(x.p.sell_price), cost_price:x.cost, discount:x.discount, subtotal:lineTotal, profit:(x.lineSub * discountRatio) - x.qty*x.cost });
+      return { item_id:uuid_(), trx_id:trxId, product_id:x.p.product_id, barcode:x.p.barcode, product_name:x.p.name, qty:x.qty, unit_price:num_(x.p.sell_price), cost_price:x.cost, discount:x.discount, subtotal:lineTotal, profit:(x.lineSub * discountRatio) - x.qty*x.cost };
+    });
+    savedItems.forEach(item => appendObject_('Transaction_Items',item));
+    computed.forEach(x => {
       const after = num_(x.p.stock) - x.qty;
       updateById_('Products','product_id',x.p.product_id,{stock:after,updated_at:now});
       appendObject_('Stock_Movements',{move_id:uuid_(),timestamp:now,product_id:x.p.product_id,type:'sale',qty_change:-x.qty,stock_before:num_(x.p.stock),stock_after:after,ref_id:trxId,user_id:u.user_id,note:'Penjualan '+invoice});
@@ -449,13 +486,13 @@ function checkout_(d,u) {
     if (customer) updateById_('Customers','customer_id',customer.customer_id,{total_spent:num_(customer.total_spent)+grandTotal,visit_count:num_(customer.visit_count)+1,points:num_(customer.points)+Math.floor(grandTotal/10000)});
     invalidateCache_();
     const trx = findBy_('Transactions','trx_id',trxId);
-    return { transaction:trx, items:computed.map(x=>({product_name:x.p.name,qty:x.qty,unit_price:num_(x.p.sell_price),subtotal:x.lineSub})), payments, outstanding, shift_id:shiftId };
+    return { transaction:trx, items:savedItems, payments, outstanding, shift_id:shiftId };
   } finally { lock.releaseLock(); }
 }
 function listTransactions_(d,u) {
   let rows = readObjects_(getDb_().getSheetByName('Transactions'));
   if (String(u.role).toLowerCase() === 'cashier') rows = rows.filter(t => t.cashier_id === u.user_id);
-  if (d.from) rows = rows.filter(t => t.date_str >= d.from); if (d.to) rows = rows.filter(t => t.date_str <= d.to);
+  if (d.from) rows = rows.filter(t => dateKey_(t.date_str) >= dateKey_(d.from)); if (d.to) rows = rows.filter(t => dateKey_(t.date_str) <= dateKey_(d.to));
   return rows.sort((a,b) => String(b.timestamp).localeCompare(String(a.timestamp))).slice(0,500);
 }
 function getTransaction_(d,u) {
@@ -465,7 +502,7 @@ function getTransaction_(d,u) {
 }
 function salesReport_(d) {
   const from = text_(d.from || dateStr_(),10); const to = text_(d.to || dateStr_(),10);
-  const allTx = readObjects_(getDb_().getSheetByName('Transactions')).filter(t => t.date_str >= from && t.date_str <= to && t.status === 'paid');
+  const allTx = readObjects_(getDb_().getSheetByName('Transactions')).filter(t => dateKey_(t.date_str) >= from && dateKey_(t.date_str) <= to && isPaidStatus_(t.status));
   let tx = allTx.slice();
   if (d.customer_id) tx = tx.filter(t => t.customer_id === d.customer_id);
   if (d.cashier_id) tx = tx.filter(t => t.cashier_id === d.cashier_id);
@@ -484,7 +521,7 @@ function salesReport_(d) {
   const itemRevenue = items.reduce((s,i)=>s+num_(i.subtotal),0);
   const revenue = categoryProductIds ? itemRevenue : tx.reduce((s,t)=>s+num_(t.grand_total),0);
   const allRevenue = allTx.reduce((s,t)=>s+num_(t.grand_total),0);
-  const expenseTotal = readObjects_(getDb_().getSheetByName('Expenses')).filter(e=>e.date_str>=from && e.date_str<=to).reduce((s,e)=>s+num_(e.amount),0);
+  const expenseTotal = readObjects_(getDb_().getSheetByName('Expenses')).filter(e=>dateKey_(e.date_str)>=from && dateKey_(e.date_str)<=to).reduce((s,e)=>s+num_(e.amount),0);
   // Allocate operating expenses proportionally when the result is a filtered slice of sales.
   const expenses = allRevenue > 0 ? expenseTotal * Math.min(1, revenue / allRevenue) : 0;
   const cogs = items.reduce((s,i)=>s+num_(i.qty)*num_(i.cost_price),0);
