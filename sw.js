@@ -1,4 +1,4 @@
-const CACHE_NAME = 'pos-superapp-v4';
+const CACHE_NAME = 'pos-superapp-v5';
 const APP_SHELL = ['/', '/index.html', '/app.js', '/manifest.json', '/icon.svg'];
 
 self.addEventListener('install', event => {
@@ -17,10 +17,6 @@ self.addEventListener('activate', event => {
   );
 });
 
-self.addEventListener('message', event => {
-  if (event.data && event.data.type === 'SKIP_WAITING') self.skipWaiting();
-});
-
 self.addEventListener('fetch', event => {
   const request = event.request;
   if (request.method !== 'GET') return;
@@ -31,33 +27,31 @@ self.addEventListener('fetch', event => {
   const isAppShell = request.mode === 'navigate' ||
     request.destination === 'script' ||
     request.destination === 'style' ||
-    url.pathname === '/index.html' ||
-    url.pathname === '/app.js' ||
-    url.pathname === '/sw.js';
+    url.pathname === '/manifest.json';
 
-  if (isAppShell) {
-    // Network-first: deployed fixes are fetched immediately; cache is an offline fallback only.
-    event.respondWith(
-      fetch(request, { cache: 'no-store' })
-        .then(response => {
-          if (response && response.ok) {
-            const copy = response.clone();
-            caches.open(CACHE_NAME).then(cache => cache.put(request, copy));
-          }
-          return response;
-        })
-        .catch(async () => (await caches.match(request)) || caches.match('/index.html'))
-    );
-    return;
-  }
+  event.respondWith((async () => {
+    const cache = await caches.open(CACHE_NAME);
 
-  event.respondWith(
-    caches.match(request).then(cached => cached || fetch(request).then(response => {
-      if (response && response.ok && (request.destination === 'image' || url.pathname.endsWith('.json'))) {
-        const copy = response.clone();
-        caches.open(CACHE_NAME).then(cache => cache.put(request, copy));
+    // Network-first for app code and navigation so deployments replace old cached UI.
+    if (isAppShell) {
+      try {
+        const response = await fetch(request, { cache: 'no-store' });
+        if (response && response.ok) await cache.put(request, response.clone());
+        return response;
+      } catch (error) {
+        return (await cache.match(request)) || (await cache.match('/index.html'));
       }
+    }
+
+    // Cache-first for static media; fall back to the network when not cached.
+    const cached = await cache.match(request);
+    if (cached) return cached;
+    try {
+      const response = await fetch(request);
+      if (response && response.ok) await cache.put(request, response.clone());
       return response;
-    }))
-  );
+    } catch (error) {
+      return new Response('', { status: 503, statusText: 'Offline' });
+    }
+  })());
 });

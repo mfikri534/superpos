@@ -1,6 +1,6 @@
 # POS SuperApp — GAS + Google Sheets + Vercel
 
-Aplikasi POS mobile-first versi 1.2.0 berbasis Vanilla JavaScript, Google Apps Script Web App, dan Google Sheets. Frontend bersifat static/PWA sehingga dapat di-host pada Vercel tanpa proses build.
+Aplikasi POS mobile-first versi 1.2.1 berbasis Vanilla JavaScript, Google Apps Script Web App, dan Google Sheets. Frontend bersifat static/PWA sehingga dapat di-host pada Vercel tanpa proses build.
 
 ## Isi project
 
@@ -76,7 +76,7 @@ Versi perbaikan ini mencakup:
 - Modal hanya ditutup saat area backdrop yang kosong benar-benar diketuk, tombol tutup ditekan, atau tombol Escape digunakan. Interaksi dengan input, tanggal, select, dan formulir di dalam modal tidak menutup modal.
 - Perhitungan kas shift membedakan data pembayaran lama (nominal bersih) dari data baru (nominal tunai diterima sebelum kembalian).
 - Pengubahan stok dari form produk menggunakan ScriptLock dan dicatat pada Stock_Movements.
-- Service Worker menggunakan cache `pos-superapp-v4` dan strategi network-first untuk HTML/JavaScript agar browser mengambil perbaikan Vercel lebih dulu; cache menjadi fallback ketika perangkat offline.
+- Service Worker menggunakan cache `pos-superapp-v5` dan strategi network-first untuk HTML/JavaScript agar browser mengambil perbaikan Vercel lebih dulu; cache menjadi fallback ketika perangkat offline.
 
 ## F. Catatan penting sebelum produksi
 
@@ -97,9 +97,12 @@ Versi perbaikan ini mencakup:
 - **Transaksi offline belum tersinkron:** hubungkan internet, buka ulang aplikasi, pastikan sesi login masih berlaku, dan periksa pesan sinkronisasi.
 
 
-## Pembaruan versi 1.2.0
+## Pembaruan versi 1.2.1
 
 - Setelah mengganti `Code.gs`, lakukan **Deploy → Manage deployments → Edit → New version → Deploy**. URL `/exec` tetap sama bila deployment yang sama diperbarui.
 - Jalankan `setupDatabase()` kembali satu kali untuk memastikan tab tambahan (misalnya `Payment_Entries`, `Cash_Movements`, dan `Customer_Debts`) sudah ada. Tab yang header-nya sudah sesuai tidak dihapus atau dikosongkan. Jangan jalankan bila Anda telah mengubah header secara manual tanpa memeriksa skemanya terlebih dahulu.
-- Unggah ulang seluruh file frontend dan deploy ulang ke Vercel. Service Worker memakai cache `pos-superapp-v4` dan mengambil HTML/JavaScript terbaru dari jaringan terlebih dahulu; cache hanya menjadi fallback offline.
+- Unggah ulang seluruh file frontend dan deploy ulang ke Vercel. Service Worker memakai cache `pos-superapp-v5` dan mengambil HTML/JavaScript terbaru dari jaringan terlebih dahulu; cache hanya menjadi fallback offline.
 - Waktu operasional dan filter tanggal aplikasi menggunakan zona `Asia/Jakarta`. Data tanggal lama yang disimpan Sheets sebagai objek Date atau teks `dd/MM/yyyy` dinormalisasi saat dibaca.
+- Daftar data memakai CardView terpisah, bukan `.table-row`: Produk, Pelanggan, Piutang, Inventori, Pengeluaran, Riwayat Transaksi, Pengguna, dan transaksi pada Laporan.
+- CardView menampilkan satu kolom pada smartphone dan dua kolom pada layar yang lebih lebar. Nama/barcode/kontak panjang dapat membungkus, angka ditampilkan pada metrik tersendiri, dan tombol aksi punya area sentuh yang jelas.
+- Filter pencarian serta aksi edit produk, penyesuaian stok, pembayaran piutang, dan cetak ulang struk tetap terhubung ke handler yang sama.

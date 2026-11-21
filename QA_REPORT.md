@@ -38,7 +38,7 @@
 
 ### PWA/deployment
 
-- Service Worker menggunakan cache `pos-superapp-v4`.
+- Service Worker menggunakan cache `pos-superapp-v5`.
 - HTML dan JavaScript memakai strategi network-first, dengan cache sebagai fallback saat offline, agar perbaikan dari Vercel tidak tertahan oleh JavaScript lama.
 - Registrasi frontend memicu pemeriksaan pembaruan Service Worker.
 - Header Vercel digabung dalam satu rule dan aset menggunakan `max-age=0, must-revalidate`.
@@ -73,3 +73,24 @@ Audit source dan pengujian logika terisolasi telah dilakukan. Saya belum dapat m
 - `sw.js`
 - `icon.svg`
 - `README.md`
+
+
+## Audit UI/UX CardView versi 1.2.1
+
+### Temuan akar masalah
+- Implementasi lama menggunakan kelas `.table-row`, nama yang juga merupakan utility bawaan Tailwind untuk `display: table-row`. Konflik cascade membuat layout grid card tidak konsisten dan dapat menyebabkan kolom informasi/tombol tampak bertumpuk pada ponsel.
+
+### Perbaikan
+- Menghapus seluruh penggunaan kelas `.table-row`, `.desk-col`, `.mobile-sub`, dan `.row-amount` dari halaman aplikasi.
+- Menggunakan kelas komponen unik `record-list`, `record-card`, `record-card-head`, `record-card-metrics`, dan `record-card-footer`.
+- Membuat satu kolom pada smartphone, dua kolom pada layar lebar, ruang teks yang membungkus, metrik dengan label, status badge, dan aksi dengan target sentuh yang cukup.
+- Mengubah daftar produk, pelanggan, piutang, inventori, pengeluaran, riwayat transaksi, pengguna, serta transaksi laporan ke CardView.
+- Memperbarui pencarian/filter tanpa mengganti nama selector `.product-row`, `.customer-row`, `.inventory-row`, dan `.history-row`.
+- Memperbarui Service Worker ke cache v5 dengan network-first untuk HTML, JavaScript, style, dan manifest.
+
+### Pemeriksaan
+- Sintaks JavaScript: diperiksa dengan `node --check`.
+- Konflik class `.table-row` / aturan layout lama: tidak ada penggunaan komponen tersebut pada markup aplikasi.
+- Selector pencarian dan aksi: dipertahankan di markup kartu.
+- HTML dan konfigurasi Vercel: validasi statis dilakukan.
+- Render visual lintas perangkat dan koneksi database produksi: belum dapat dikonfirmasi melalui akun/perangkat pengguna; lakukan uji ponsel dan desktop setelah deployment.
