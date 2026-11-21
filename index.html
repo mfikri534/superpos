@@ -1,0 +1,133 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <title>POS SuperApp</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
+  <style>
+    :root {
+      --bg-canvas: #FAF9F6;
+      --border-dark: #1E293B;
+      --shadow-dark: #1E293B;
+    }
+    body { font-family: 'Plus Jakarta Sans', sans-serif; background-color: var(--bg-canvas); color: var(--border-dark); }
+    .font-mono { font-family: 'JetBrains Mono', monospace; }
+    
+    /* Noteme Bento & Neobrutalist-lite Cards */
+    .bento-card {
+      background: #FFFFFF;
+      border: 1.5px solid var(--border-dark);
+      box-shadow: 3px 3px 0px var(--shadow-dark);
+      border-radius: 16px;
+      transition: transform 0.1s, box-shadow 0.1s;
+    }
+    .bento-card:active { transform: translate(2px, 2px); box-shadow: 1px 1px 0px var(--shadow-dark); }
+    
+    /* Zero-Horizontal-Scroll Mobile Table (Adaptive Card-Row) */
+    .table-row-mobile { display: flex; flex-direction: column; gap: 4px; }
+    @media (min-width: 768px) {
+      .table-row-mobile { flex-direction: row; align-items: center; }
+    }
+
+    /* Custom Scrollbar */
+    ::-webkit-scrollbar { width: 6px; height: 6px; }
+    ::-webkit-scrollbar-thumb { background: #CBD5E1; border-radius: 10px; }
+  </style>
+</head>
+<body class="h-screen flex flex-col overflow-hidden">
+
+  <!-- FIXED TOP HEADER (Mobile & Desktop) -->
+  <header class="h-[52px] flex items-center justify-between px-4 border-b-[1.5px] border-[#1E293B] bg-white z-50">
+    <div class="flex items-center gap-2">
+      <div class="w-8 h-8 bg-[#FDE68A] border-[1.5px] border-[#1E293B] rounded-lg flex items-center justify-center font-bold">P</div>
+      <h1 class="font-bold text-lg tracking-tight">Kopi Senja</h1>
+    </div>
+    <div class="flex items-center gap-2">
+      <span id="sync-status" class="px-2 py-1 text-xs font-bold bg-[#A7F3D0] border border-[#1E293B] rounded-full">Online</span>
+      <button id="btn-bt" class="p-2 bg-[#BFDBFE] border-[1.5px] border-[#1E293B] rounded-lg" title="Bluetooth Printer">
+        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8.112 16.688a1 1 0 01-1.414-1.414l5.586-5.586a1 1 0 00-1.414-1.414l-5.586 5.586a1 1 0 01-1.414-1.414l6.293-6.293a1 1 0 011.414 0l6.293 6.293a1 1 0 01-1.414 1.414l-5.586-5.586a1 1 0 00-1.414 1.414l5.586 5.586a1 1 0 01-1.414 1.414l-6.293 6.293a1 1 0 01-1.414 0l-6.293-6.293z"></path></svg>
+      </button>
+    </div>
+  </header>
+
+  <!-- MAIN WORKSPACE -->
+  <main class="flex-1 flex overflow-hidden">
+    
+    <!-- LEFT PANE: POS CATALOG (Desktop: 65%, Mobile: Full) -->
+    <section class="flex-1 flex flex-col overflow-hidden p-4 gap-4">
+      <!-- Search & Barcode -->
+      <div class="bento-card p-3 flex items-center gap-2">
+        <input id="search-input" type="text" placeholder="Scan barcode atau cari produk..." class="flex-1 bg-transparent outline-none font-medium placeholder:text-slate-400">
+        <button class="px-3 py-1.5 bg-[#1E293B] text-white text-xs font-bold rounded-lg border border-[#1E293B]">SCAN</button>
+      </div>
+
+      <!-- Categories -->
+      <div class="flex gap-2 overflow-x-auto pb-2 no-scrollbar">
+        <button class="px-4 py-2 bg-[#1E293B] text-white text-sm font-bold rounded-full whitespace-nowrap">Semua</button>
+        <button class="px-4 py-2 bg-white border-[1.5px] border-[#1E293B] text-sm font-bold rounded-full whitespace-nowrap">Kopi</button>
+        <button class="px-4 py-2 bg-white border-[1.5px] border-[#1E293B] text-sm font-bold rounded-full whitespace-nowrap">Non-Kopi</button>
+        <button class="px-4 py-2 bg-white border-[1.5px] border-[#1E293B] text-sm font-bold rounded-full whitespace-nowrap">Snack</button>
+      </div>
+
+      <!-- Product Grid (Zero Horizontal Scroll) -->
+      <div id="product-grid" class="flex-1 overflow-y-auto grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3 content-start">
+        <!-- Products will be injected here by app.js -->
+      </div>
+    </section>
+
+    <!-- RIGHT PANE: CART (Desktop: 35%, Mobile: Bottom Sheet) -->
+    <aside class="hidden md:flex w-[35%] flex-col border-l-[1.5px] border-[#1E293B] bg-[#FAF9F6]">
+      <div class="p-4 border-b-[1.5px] border-[#1E293B] flex justify-between items-center">
+        <h2 class="font-bold text-lg">Keranjang</h2>
+        <span class="px-2 py-1 bg-[#FECACA] border border-[#1E293B] rounded-full text-xs font-bold">Meja 1</span>
+      </div>
+      <div id="cart-items" class="flex-1 overflow-y-auto p-4 space-y-3">
+        <!-- Cart items injected here -->
+      </div>
+      <div class="p-4 border-t-[1.5px] border-[#1E293B] bg-white space-y-3">
+        <div class="flex justify-between font-mono font-bold text-lg">
+          <span>TOTAL</span>
+          <span id="cart-total">Rp 0</span>
+        </div>
+        <button id="btn-checkout" class="w-full py-3 bg-[#A7F3D0] border-[1.5px] border-[#1E293B] rounded-xl font-bold text-lg shadow-[3px_3px_0px_#1E293B] active:shadow-none active:translate-x-[3px] active:translate-y-[3px]">
+          BAYAR (Enter)
+        </button>
+      </div>
+    </aside>
+  </main>
+
+  <!-- FIXED BOTTOM DOCK (Mobile Only) -->
+  <nav class="md:hidden h-[60px] border-t-[1.5px] border-[#1E293B] bg-white flex items-center justify-around px-4 z-50">
+    <button class="flex flex-col items-center gap-1 text-[#1E293B]">
+      <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 3h2l.4 2M7 13h10l4-8H5.4M7 13L5.4 5M7 13l-2.293 2.293c-.63.63-.184 1.707.707 1.707H17m0 0a2 2 0 100 4 2 2 0 000-4zm-8 2a2 2 0 11-4 0 2 2 0 014 0z"></path></svg>
+      <span class="text-[10px] font-bold">POS</span>
+    </button>
+    <button class="flex flex-col items-center gap-1 text-slate-400">
+      <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4"></path></svg>
+      <span class="text-[10px] font-bold">Produk</span>
+    </button>
+    <button class="flex flex-col items-center gap-1 text-slate-400">
+      <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z"></path></svg>
+      <span class="text-[10px] font-bold">Laporan</span>
+    </button>
+    <button class="flex flex-col items-center gap-1 text-slate-400">
+      <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16M4 18h16"></path></svg>
+      <span class="text-[10px] font-bold">Menu</span>
+    </button>
+  </nav>
+
+  <!-- MOBILE FLOATING CART BAR -->
+  <div id="mobile-cart-bar" class="md:hidden fixed bottom-[60px] left-4 right-4 bento-card p-3 flex items-center justify-between z-40 hidden">
+    <div>
+      <span id="mobile-cart-count" class="font-bold">0 Item</span>
+      <span class="text-slate-500 mx-2">•</span>
+      <span id="mobile-cart-total" class="font-mono font-bold">Rp 0</span>
+    </div>
+    <button class="px-4 py-2 bg-[#1E293B] text-white font-bold rounded-lg">Bayar</button>
+  </div>
+
+  <script src="app.js"></script>
+</body>
+</html>
