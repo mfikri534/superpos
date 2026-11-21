@@ -1,0 +1,94 @@
+<!doctype html>
+<html lang="id">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+  <meta name="theme-color" content="#FAF9F6">
+  <meta name="description" content="POS SuperApp — kasir, inventori, pelanggan, laporan, dan asisten bisnis.">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="default">
+  <link rel="manifest" href="/manifest.json">
+  <link rel="icon" href="/icon.svg" type="image/svg+xml">
+  <style> .hidden{display:none!important} .fixed{position:fixed} .flex{display:flex} .grid{display:grid} .block{display:block} .w-full{width:100%} .text-sm{font-size:14px} .text-xs{font-size:12px} .font-bold{font-weight:700} .font-extrabold{font-weight:800} </style>
+  <script>
+    tailwind.config = {
+      theme: { extend: {
+        fontFamily: { sans: ['Inter','sans-serif'], mono: ['JetBrains Mono','monospace'] },
+        colors: { ink:'#1E293B', cream:'#FAF9F6', mint:'#A7F3D0', lemon:'#FDE68A', lavender:'#DDD6FE', coral:'#FECACA', sky:'#BFDBFE' },
+        boxShadow: { hard:'3px 3px 0 #1E293B', soft:'0 12px 40px rgba(30,41,59,.08)' }
+      }}
+    };
+  </script>
+  <script>window.lucide={createIcons(){}};</script>
+  <style>
+    :root{--ink:#1E293B;--cream:#FAF9F6;--line:rgba(30,41,59,.14);--muted:#64748b}
+    *{box-sizing:border-box} html,body{min-height:100%;background:var(--cream);color:var(--ink)}
+    html{height:100%;scroll-padding-bottom:120px}
+    body{font-family:Inter,system-ui,sans-serif;margin:0;min-height:100vh;min-height:100dvh;overflow-x:hidden;-webkit-tap-highlight-color:transparent}
+    body.modal-open{overflow:hidden}
+    #app{min-height:100vh;min-height:100dvh}
+    .app-shell{min-height:100vh;min-height:100dvh;width:100%;}
+    .app-main{min-width:0;padding-bottom:calc(128px + env(safe-area-inset-bottom, 0px));}
+    @media(min-width:768px){.app-main{padding-bottom:28px}}
+    button,input,select,textarea{font:inherit} button{cursor:pointer}
+    .bento{background:#fff;border:1.5px solid var(--ink);border-radius:16px;box-shadow:3px 3px 0 var(--ink)}
+    .bento-soft{background:#fff;border:1px solid var(--line);border-radius:16px}
+    .btn{border:1.5px solid var(--ink);border-radius:12px;padding:.65rem .9rem;font-weight:700;display:inline-flex;align-items:center;justify-content:center;gap:.45rem;transition:transform .12s,box-shadow .12s;box-shadow:2px 2px 0 var(--ink);background:#fff}
+    .btn:active{transform:translate(2px,2px);box-shadow:0 0 0 var(--ink)} .btn-primary{background:#A7F3D0}.btn-dark{background:var(--ink);color:#fff}.btn-danger{background:#FECACA}.btn-ghost{box-shadow:none;border-color:transparent;background:transparent}
+    .field{width:100%;border:1.5px solid #cbd5e1;border-radius:11px;padding:.7rem .8rem;background:#fff;outline:none;min-width:0}
+    .field:focus{border-color:var(--ink);box-shadow:0 0 0 3px rgba(191,219,254,.8)}
+    .label{display:block;font-size:.74rem;font-weight:800;color:#64748b;margin:0 0 .35rem;letter-spacing:.04em;text-transform:uppercase}
+    .nav-item{width:100%;display:flex;align-items:center;gap:.7rem;text-align:left;border-radius:12px;padding:.7rem .8rem;color:#64748b;font-size:.86rem;font-weight:700}
+    .nav-item.active,.nav-item:hover{background:#FDE68A;color:var(--ink)}
+    .pill{border-radius:999px;padding:.23rem .58rem;font-size:.7rem;font-weight:800;white-space:nowrap}
+    .kpi{background:#fff;border:1.5px solid var(--ink);border-radius:16px;padding:1rem;box-shadow:3px 3px 0 var(--ink);min-width:0}
+    .mono{font-family:'JetBrains Mono',monospace;font-variant-numeric:tabular-nums}
+    .product-card{background:#fff;border:1.5px solid var(--ink);border-radius:14px;padding:.8rem;text-align:left;min-width:0;box-shadow:2px 2px 0 var(--ink);transition:transform .12s}
+    .product-card:active{transform:translate(2px,2px);box-shadow:none}
+    .product-tile{height:45px;width:45px;border-radius:12px;display:grid;place-items:center;font-size:1.2rem;flex:none}
+    .scrollbar-none{scrollbar-width:none}.scrollbar-none::-webkit-scrollbar{display:none}
+    .bottom-dock{min-height:calc(68px + env(safe-area-inset-bottom, 0px));padding:8px 8px calc(8px + env(safe-area-inset-bottom, 0px));}
+    .bottom-dock button{min-height:48px;touch-action:manipulation}
+    .pos-cart-bar{bottom:calc(76px + env(safe-area-inset-bottom, 0px));}
+    .modal-backdrop{position:fixed;inset:0;min-height:100vh;min-height:100dvh;background:rgba(15,23,42,.42);z-index:80;display:flex;align-items:flex-end;justify-content:center;padding:8px 0 env(safe-area-inset-bottom, 0px);overflow-y:auto;overscroll-behavior:contain}
+    .modal-sheet{background:#fff;border:1.5px solid var(--ink);border-radius:20px 20px 0 0;width:100%;max-height:92vh;max-height:calc(100dvh - env(safe-area-inset-top, 0px) - 8px);overflow-y:auto;overscroll-behavior:contain;-webkit-overflow-scrolling:touch;padding:1rem;padding-bottom:calc(1rem + env(safe-area-inset-bottom, 0px));box-shadow:0 -8px 40px rgba(15,23,42,.16);}
+    .modal-sheet input,.modal-sheet select,.modal-sheet textarea{font-size:16px}
+    @media(min-width:768px){.modal-backdrop{align-items:center;padding:1rem;}.modal-sheet{max-width:620px;border-radius:20px;max-height:calc(88dvh - 16px);padding-bottom:1rem}}
+    .table-row{display:grid;grid-template-columns:minmax(0,1fr) 110px 125px;align-items:center;gap:.75rem;padding:.85rem .9rem;border-bottom:1px solid #e2e8f0}
+    .table-row:last-child{border-bottom:0}
+    @media(max-width:767px){.table-row{grid-template-columns:minmax(0,1fr) auto;gap:.25rem .6rem;padding:.8rem}.table-row .desk-col{display:none}.table-row .mobile-sub{display:block}.table-row .row-amount{grid-column:2;grid-row:1 / span 2;align-self:center;text-align:right}}
+    .mobile-sub{display:none}
+    .toast{animation:slideUp .2s ease-out}@keyframes slideUp{from{opacity:0;transform:translateY(12px)}to{opacity:1;transform:translateY(0)}}
+    .skeleton{background:linear-gradient(90deg,#eee 25%,#f7f7f7 50%,#eee 75%);background-size:200% 100%;animation:shimmer 1.2s infinite}@keyframes shimmer{to{background-position:-200% 0}}
+    .safe-bottom{padding-bottom:calc(128px + env(safe-area-inset-bottom, 0px))}
+    @media(min-width:768px){.safe-bottom{padding-bottom:28px}}
+    @supports(height:100svh){body,#app,.app-shell{min-height:100svh}}
+  </style>
+  <script>
+    window.POS_CONFIG = { API_URL: 'https://script.google.com/macros/s/test/exec' };
+    localStorage.setItem('pos_session_token','test-token');
+    localStorage.setItem('pos_user',JSON.stringify({user_id:'u1',username:'owner',full_name:'Owner Tester',role:'owner'}));
+    window.fetch=async (url,opts={})=>{
+      const req=JSON.parse(opts.body||'{}'); let data={};
+      switch(req.action){
+        case 'bootstrap': data={user:{user_id:'u1',username:'owner',full_name:'Owner Tester',role:'owner'},settings:{store_name:'Toko Test',currency:'IDR',tax_percent:'0',allow_negative_stock:'false'},catalog:{categories:[],products:[]},shift:null,dashboard:{revenue:0,net_profit:0,transactions:0,aov:0,top_products:[],low_stock:[]}}; break;
+        case 'customers.list': data=[]; break;
+        case 'expenses.list': data=[]; break;
+        case 'users.list': data=[]; break;
+        case 'shifts.current': data=null; break;
+        case 'settings.get': data={store_name:'Toko Test',currency:'IDR',tax_percent:'0',allow_negative_stock:'false'}; break;
+        case 'settings.save': data=req.data; break;
+        case 'expenses.save': data={expense_id:'e1',...req.data}; break;
+        default: data={};
+      }
+      return new Response(JSON.stringify({ok:true,data}),{status:200,headers:{'Content-Type':'application/json'}});
+    };
+    if('serviceWorker' in navigator) navigator.serviceWorker.register=()=>Promise.resolve({});
+  </script>
+</head>
+<body>
+  <div id="app" class="min-h-screen"><div class="min-h-screen grid place-items-center p-6"><div class="text-center"><div class="mx-auto h-12 w-12 rounded-2xl bg-mint border-2 border-ink shadow-hard grid place-items-center text-xl">▦</div><p class="mt-4 font-extrabold">POS SuperApp</p><p class="text-sm text-slate-500 mt-1">Menyiapkan aplikasi…</p></div></div></div>
+  <div id="toast-root" class="fixed z-[110] right-4 space-y-2 pointer-events-none" style="bottom:calc(112px + env(safe-area-inset-bottom, 0px))"></div>
+  <script src="/app.js" defer></script>
+</body>
+</html>

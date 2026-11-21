@@ -4,9 +4,12 @@
  * Frontend sends POST text/plain to avoid a browser CORS preflight.
  */
 
+// ID Google Spreadsheet database (diisi manual sesuai spreadsheet yang digunakan).
+const DB_ID = '1dPOeQ_Pgavzwj_Tz9IAQEJ22jTliEIVKeRAwUZgg3_o';
+
 const APP = {
   NAME: 'POS SuperApp',
-  VERSION: '1.0.0',
+  VERSION: '1.0.1',
   SESSION_TTL: 21600,
   CACHE_TTL: 120,
   ROLES: ['owner', 'admin', 'manager', 'cashier'],
@@ -77,24 +80,19 @@ function bool_(v) { return v === true || String(v).toLowerCase() === 'true' || S
 function hash_(s) { return Utilities.computeDigest(Utilities.DigestAlgorithm.SHA_256, String(s), Utilities.Charset.UTF_8).map(b => ('0' + ((b + 256) % 256).toString(16)).slice(-2)).join(''); }
 
 function getDb_() {
-  const props = PropertiesService.getScriptProperties();
-  const id = props.getProperty('POS_SPREADSHEET_ID');
-  if (id) return SpreadsheetApp.openById(id);
-  const active = SpreadsheetApp.getActiveSpreadsheet();
-  if (active) { props.setProperty('POS_SPREADSHEET_ID', active.getId()); return active; }
-  throw new Error('Database belum dikonfigurasi. Jalankan setupDatabase() dari spreadsheet terikat, atau set POS_SPREADSHEET_ID di Script Properties.');
+  if (!DB_ID || DB_ID === 'MASUKKAN_ID_SPREADSHEET') {
+    throw new Error('DB_ID belum diisi. Masukkan ID Google Spreadsheet pada konstanta DB_ID di Code.gs.');
+  }
+  try {
+    return SpreadsheetApp.openById(DB_ID);
+  } catch (err) {
+    throw new Error('Database tidak dapat dibuka. Periksa DB_ID dan pastikan akun deployment memiliki akses ke spreadsheet. Detail: ' + safeError_(err));
+  }
 }
 
 function setupDatabase() {
-  const props = PropertiesService.getScriptProperties();
-  let ss;
-  const existingId = props.getProperty('POS_SPREADSHEET_ID');
-  if (existingId) ss = SpreadsheetApp.openById(existingId);
-  else {
-    ss = SpreadsheetApp.getActiveSpreadsheet();
-    if (!ss) ss = SpreadsheetApp.create('POS SuperApp Database');
-    props.setProperty('POS_SPREADSHEET_ID', ss.getId());
-  }
+  // Seluruh tab dan header dibuat langsung pada spreadsheet dengan ID di konstanta DB_ID.
+  const ss = getDb_();
   Object.keys(APP.SCHEMA).forEach(name => {
     let sh = ss.getSheetByName(name);
     if (!sh) sh = ss.insertSheet(name);
@@ -308,19 +306,23 @@ function dashboardSummary_(filters) {
   }, 45);
 }
 function saveProduct_(d,u) {
-  const name = text_(d.name, 120); if (!name) throw new Error('Nama produk wajib diisi.');
-  const id = text_(d.product_id, 80) || uuid_();
-  const item = { product_id:id, barcode:text_(d.barcode, 80), sku:text_(d.sku, 80), name, category_id:text_(d.category_id, 80), buy_price:Math.max(0,num_(d.buy_price)), sell_price:Math.max(0,num_(d.sell_price)), member_price:Math.max(0,num_(d.member_price)), stock:num_(d.stock), min_stock:Math.max(0,num_(d.min_stock)), unit:text_(d.unit || 'pcs', 20), tax_rate:Math.max(0,num_(d.tax_rate, num_(getSetting_('tax_percent')))), is_active:true, updated_at:nowIso_() };
-  const old = findBy_('Products','product_id',id);
-  if (old) {
-    updateById_('Products','product_id',id,item);
-    const delta = num_(item.stock) - num_(old.stock);
-    if (delta !== 0) appendObject_('Stock_Movements',{move_id:uuid_(),timestamp:nowIso_(),product_id:id,type:'product_edit_adjustment',qty_change:delta,stock_before:num_(old.stock),stock_after:num_(item.stock),ref_id:id,user_id:u.user_id,note:'Penyesuaian stok dari form produk'});
-  } else {
-    appendObject_('Products',item);
-    if (num_(item.stock) > 0) appendObject_('Stock_Movements',{move_id:uuid_(),timestamp:nowIso_(),product_id:id,type:'initial_stock',qty_change:num_(item.stock),stock_before:0,stock_after:num_(item.stock),ref_id:id,user_id:u.user_id,note:'Stok awal produk'});
-  }
-  invalidateCache_(); return item;
+  const lock = LockService.getScriptLock(); lock.waitLock(15000);
+  try {
+    const name = text_(d.name, 120); if (!name) throw new Error('Nama produk wajib diisi.');
+    const id = text_(d.product_id, 80) || uuid_();
+    const item = { product_id:id, barcode:text_(d.barcode, 80), sku:text_(d.sku, 80), name, category_id:text_(d.category_id, 80), buy_price:Math.max(0,num_(d.buy_price)), sell_price:Math.max(0,num_(d.sell_price)), member_price:Math.max(0,num_(d.member_price)), stock:num_(d.stock), min_stock:Math.max(0,num_(d.min_stock)), unit:text_(d.unit || 'pcs', 20), tax_rate:Math.max(0,num_(d.tax_rate, num_(getSetting_('tax_percent')))), is_active:true, updated_at:nowIso_() };
+    if (item.stock < 0 && !bool_(getSetting_('allow_negative_stock'))) throw new Error('Stok awal tidak boleh negatif.');
+    const old = findBy_('Products','product_id',id);
+    if (old) {
+      updateById_('Products','product_id',id,item);
+      const delta = num_(item.stock) - num_(old.stock);
+      if (delta !== 0) appendObject_('Stock_Movements',{move_id:uuid_(),timestamp:nowIso_(),product_id:id,type:'product_edit_adjustment',qty_change:delta,stock_before:num_(old.stock),stock_after:num_(item.stock),ref_id:id,user_id:u.user_id,note:'Penyesuaian stok dari form produk'});
+    } else {
+      appendObject_('Products',item);
+      if (num_(item.stock) !== 0) appendObject_('Stock_Movements',{move_id:uuid_(),timestamp:nowIso_(),product_id:id,type:'initial_stock',qty_change:num_(item.stock),stock_before:0,stock_after:num_(item.stock),ref_id:id,user_id:u.user_id,note:'Stok awal produk'});
+    }
+    invalidateCache_(); return item;
+  } finally { lock.releaseLock(); }
 }
 function deactivate_(sheet, idField, id) {
   if (!id || !updateById_(sheet,idField,id,{is_active:false})) throw new Error('Data tidak ditemukan.');
@@ -442,7 +444,7 @@ function checkout_(d,u) {
       updateById_('Products','product_id',x.p.product_id,{stock:after,updated_at:now});
       appendObject_('Stock_Movements',{move_id:uuid_(),timestamp:now,product_id:x.p.product_id,type:'sale',qty_change:-x.qty,stock_before:num_(x.p.stock),stock_after:after,ref_id:trxId,user_id:u.user_id,note:'Penjualan '+invoice});
     });
-    receivedEntries.forEach(p => appendObject_('Payment_Entries',{payment_id:uuid_(),trx_id:trxId,shift_id:shiftId,customer_id:customer ? customer.customer_id : '',method:text_(p.method,30),amount:Math.min(num_(p.amount),grandTotal),timestamp:now,user_id:u.user_id,note:''}));
+    receivedEntries.forEach(p => appendObject_('Payment_Entries',{payment_id:uuid_(),trx_id:trxId,shift_id:shiftId,customer_id:customer ? customer.customer_id : '',method:text_(p.method,30),amount:num_(p.amount),timestamp:now,user_id:u.user_id,note:'gross_tendered'}));
     if (outstanding > 0) appendObject_('Customer_Debts',{debt_id:uuid_(),trx_id:trxId,customer_id:customer.customer_id,original_amount:outstanding,outstanding_amount:outstanding,status:'open',created_at:now,updated_at:now});
     if (customer) updateById_('Customers','customer_id',customer.customer_id,{total_spent:num_(customer.total_spent)+grandTotal,visit_count:num_(customer.visit_count)+1,points:num_(customer.points)+Math.floor(grandTotal/10000)});
     invalidateCache_();
@@ -499,10 +501,14 @@ function openShift_(d,u) {
 }
 function shiftExpectedCash_(shift) {
   const opening=num_(shift.opening_cash);
-  const payments=readObjects_(getDb_().getSheetByName('Payment_Entries')).filter(p=>p.shift_id===shift.shift_id && String(p.method).toLowerCase()==='tunai').reduce((s,p)=>s+num_(p.amount),0);
+  const cashEntries=readObjects_(getDb_().getSheetByName('Payment_Entries')).filter(p=>p.shift_id===shift.shift_id && String(p.method).toLowerCase()==='tunai');
+  const payments=cashEntries.reduce((s,p)=>s+num_(p.amount),0);
   const cashMovements=readObjects_(getDb_().getSheetByName('Cash_Movements')).filter(m=>m.shift_id===shift.shift_id).reduce((s,m)=>s+(m.type==='in'?num_(m.amount):-num_(m.amount)),0);
-  const txIds=new Set(readObjects_(getDb_().getSheetByName('Transactions')).filter(t=>{try{return JSON.parse(t.notes||'{}').shift_id===shift.shift_id;}catch(_){return false;}}).map(t=>t.trx_id));
-  const change=readObjects_(getDb_().getSheetByName('Transactions')).filter(t=>txIds.has(t.trx_id)).reduce((s,t)=>s+num_(t.change_due),0);
+  const transactions=readObjects_(getDb_().getSheetByName('Transactions')).filter(t=>{try{return JSON.parse(t.notes||'{}').shift_id===shift.shift_id;}catch(_){return false;}});
+  // New payment rows store gross cash received, so subtract their change.
+  // Historical rows stored the amount applied to the bill (already net of change).
+  const grossTenderTrxIds=new Set(cashEntries.filter(p=>p.note==='gross_tendered').map(p=>p.trx_id));
+  const change=transactions.filter(t=>grossTenderTrxIds.has(t.trx_id)).reduce((s,t)=>s+num_(t.change_due),0);
   return opening+payments-change+cashMovements;
 }
 function closeShift_(d,u) {
@@ -515,9 +521,14 @@ function closeShift_(d,u) {
   } finally { lock.releaseLock(); }
 }
 function cashMove_(d,u) {
-  const s=currentShift_(u); if (!s) throw new Error('Buka shift terlebih dahulu.');
-  const amount=num_(d.amount); if (amount<=0) throw new Error('Nominal harus lebih dari nol.');
-  const type=d.type==='in'?'in':'out'; const item={move_id:uuid_(),shift_id:s.shift_id,type,amount,description:text_(d.description || (type==='in'?'Kas masuk':'Kas keluar'),200),timestamp:nowIso_(),user_id:u.user_id}; appendObject_('Cash_Movements',item); return item;
+  const lock=LockService.getScriptLock(); lock.waitLock(10000);
+  try {
+    const s=currentShift_(u); if (!s) throw new Error('Buka shift terlebih dahulu.');
+    const amount=num_(d.amount); if (amount<=0) throw new Error('Nominal harus lebih dari nol.');
+    const type=d.type==='in'?'in':'out';
+    const item={move_id:uuid_(),shift_id:s.shift_id,type,amount,description:text_(d.description || (type==='in'?'Kas masuk':'Kas keluar'),200),timestamp:nowIso_(),user_id:u.user_id};
+    appendObject_('Cash_Movements',item); return item;
+  } finally { lock.releaseLock(); }
 }
 function listHeld_(u) { return readObjects_(getDb_().getSheetByName('Held_Carts')).filter(c=>c.user_id===u.user_id).sort((a,b)=>String(b.updated_at).localeCompare(String(a.updated_at))); }
 function saveHeld_(d,u) {

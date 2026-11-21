@@ -15,7 +15,7 @@ Aplikasi POS mobile-first berbasis Vanilla JavaScript, Google Apps Script Web Ap
 1. Buat sebuah Google Spreadsheet kosong, misalnya `POS SuperApp Database`.
 2. Dari spreadsheet, buka **Extensions → Apps Script**.
 3. Salin isi `Code.gs` ke file `Code.gs` pada editor Apps Script, lalu simpan.
-4. Pada editor Apps Script, pilih fungsi `setupDatabase`, lalu klik **Run** dan setujui izin. Fungsi ini membuat tab dan header database secara otomatis. Jika project Apps Script dibuat standalone tanpa spreadsheet aktif, fungsi akan membuat spreadsheet baru dan menyimpan ID-nya pada Script Properties.
+4. Pastikan konstanta `DB_ID` di bagian atas `Code.gs` sudah berisi ID spreadsheet database yang benar. Jalankan fungsi `setupDatabase`, lalu setujui izin. Fungsi ini membuat tab dan header langsung pada spreadsheet dengan ID tersebut. ID database tidak lagi dibaca dari Script Properties atau spreadsheet aktif.
 5. Buka **Project Settings → Script Properties**, tambahkan properti berikut untuk membuat akun owner awal:
 
    | Property | Contoh nilai |
@@ -25,7 +25,7 @@ Aplikasi POS mobile-first berbasis Vanilla JavaScript, Google Apps Script Web Ap
    | `INITIAL_ADMIN_PIN` | PIN 4–6 digit |
    | `INITIAL_ADMIN_NAME` | `Administrator Toko` |
 
-6. Kembali ke editor, jalankan fungsi `bootstrapAdmin` satu kali. Fungsi membuat akun owner dengan hash SHA-256 dan menghapus empat properti kredensial sementara tadi. Jangan jalankan ulang setelah tab Users terisi.
+6. Kembali ke editor, jalankan fungsi `bootstrapAdmin` satu kali. Fungsi membuat akun owner dengan hash SHA-256 dan menghapus empat properti kredensial sementara tadi. Jangan jalankan ulang setelah tab Users terisi. Pastikan akun Google yang menjalankan/deploy Apps Script memiliki akses Editor ke spreadsheet `DB_ID`.
 7. Opsional: pada **Project Settings**, atur timezone project ke `Asia/Jakarta` agar tanggal laporan dan invoice sesuai zona waktu toko.
 8. Pilih **Deploy → New deployment → Web app**:
    - Execute as: **Me**
@@ -67,7 +67,18 @@ URL GAS disimpan di localStorage browser yang digunakan. Untuk browser/perangkat
 - Gemini BYOK: `gemini-3.5-flash-lite` dan `gemini-3.1-flash-lite`. API key disimpan pada localStorage browser, bukan di source code maupun Sheets.
 - PWA app shell dan antrean checkout lokal yang dikirim ke GAS saat koneksi kembali.
 
-## E. Catatan penting sebelum produksi
+## E. Pembaruan UI & perbaikan bug
+
+Versi perbaikan ini mencakup:
+
+- Area konten mobile diberi ruang bawah yang cukup untuk dock navigasi dan safe-area perangkat; halaman tetap dapat digulir sampai konten paling akhir.
+- Modal mobile memakai batas tinggi viewport dinamis, area scroll internal, dan ukuran font kontrol minimal 16px agar date picker/select tidak memicu zoom iOS.
+- Modal hanya ditutup saat area backdrop yang kosong benar-benar diketuk, tombol tutup ditekan, atau tombol Escape digunakan. Interaksi dengan input, tanggal, select, dan formulir di dalam modal tidak menutup modal.
+- Perhitungan kas shift membedakan data pembayaran lama (nominal bersih) dari data baru (nominal tunai diterima sebelum kembalian).
+- Pengubahan stok dari form produk menggunakan ScriptLock dan dicatat pada Stock_Movements.
+- Cache Service Worker dinaikkan ke `pos-superapp-v2` dan aset Vercel menggunakan revalidasi agar browser tidak menyimpan `app.js` versi lama selama satu tahun.
+
+## F. Catatan penting sebelum produksi
 
 - **Google Sheets cocok untuk skala kecil/menengah dan beban transaksi rendah–menengah.** Untuk multi-outlet dengan transaksi padat, kebutuhan audit formal, atau SLA tinggi, pertimbangkan database transaksional (mis. Cloud SQL/Firestore) dan backend khusus.
 - Arsitektur ini mengikuti spesifikasi SHA-256 client-side. Hash yang dikirim login bertindak sebagai kredensial autentikasi, sehingga wajib menggunakan HTTPS, password kuat, perangkat kasir yang terkontrol, dan pembatasan akses. PIN 4–6 digit hanya untuk pergantian kasir cepat; jangan jadikan PIN sebagai satu-satunya kontrol untuk akun administrator.
@@ -77,7 +88,7 @@ URL GAS disimpan di localStorage browser yang digunakan. Untuk browser/perangkat
 - Gemini BYOK mengirim ringkasan data toko ke Google Gemini API sesuai pertanyaan pengguna. Pengguna bertanggung jawab atas pengelolaan API key dan kebijakan data yang dikirim.
 - Sebelum penggunaan nyata, lakukan uji transaksi, kembalian, split payment, pajak, Kasbon, retur/koreksi transaksi (belum disediakan dalam versi ini), stock opname, tutup shift, dan pemulihan backup spreadsheet.
 
-## F. Pemecahan masalah
+## G. Pemecahan masalah
 
 - **Respons bukan JSON / login gagal:** pastikan URL benar-benar URL deployment `/exec`, deployment memakai versi terbaru, dan akses Web App sesuai kebutuhan.
 - **Perubahan Code.gs tidak muncul:** lakukan **Deploy → Manage deployments → Edit → New version → Deploy**.

@@ -102,11 +102,13 @@
   async function refreshShift() { state.shift = await api('shifts.current');saveJson(STORAGE.shift,state.shift);return state.shift; }
   async function logout() {
     try { await api('auth.logout'); } catch (_) {}
+    state.modal = null; state.cartOpen = false;
     state.token = ''; state.user = null; localStorage.removeItem(STORAGE.token); localStorage.removeItem(STORAGE.user); state.cart = []; persistCart(); state.page = 'pos'; render();
   }
 
   function render() {
     const root = $('#app');
+    document.body.classList.toggle('modal-open', !!(state.modal || state.cartOpen));
     if (!state.user) { root.innerHTML = renderLogin(); bindLogin(); refreshIcons(); return; }
     root.innerHTML = renderShell(); bindShell(); refreshIcons();
   }
@@ -175,7 +177,7 @@
   function renderShell() {
     const nav = allowedNav();
     const pageTitle = nav.find(n => n.id === state.page)?.label || 'POS SuperApp';
-    return `<div class="min-h-[100dvh] md:flex">
+    return `<div class="app-shell md:flex">
       <aside class="hidden md:flex w-[232px] shrink-0 border-r border-slate-200 bg-white min-h-screen flex-col px-3 py-5 sticky top-0 h-screen">
         <div class="flex items-center gap-3 px-2 mb-8"><div class="h-10 w-10 rounded-xl bg-mint border-2 border-ink shadow-hard grid place-items-center text-lg">▦</div><div class="min-w-0"><div class="font-extrabold leading-tight truncate">${esc(state.settings.store_name || 'POS SuperApp')}</div><div class="text-[10px] text-slate-500 font-bold tracking-widest">POS SUPERAPP</div></div></div>
         <div class="text-[10px] text-slate-400 font-extrabold uppercase tracking-widest px-3 mb-2">Workspace</div>
@@ -187,9 +189,9 @@
           <div class="min-w-0"><div class="font-extrabold text-base truncate">${esc(pageTitle)}</div><div class="text-[10px] text-slate-500 md:hidden truncate">${esc(state.settings.store_name || 'POS SuperApp')}</div></div>
           <div class="flex items-center gap-2"><span class="pill ${state.online?'bg-mint':'bg-coral'} flex items-center gap-1">● ${state.online?'Online':'Offline'}</span><span class="hidden sm:inline pill ${state.shift?'bg-lemon':'bg-white border border-slate-200'}">${state.shift?'Shift aktif':'Shift belum dibuka'}</span><button class="btn p-2" data-action="open-shift" title="Shift">${icon('clock-3',16)}</button><button class="btn btn-dark p-2" data-page="ai" title="AI Copilot" ${!canSeeReports()?'disabled':''}>${icon('sparkles',16)}</button><button class="md:hidden btn p-2" data-action="more">${icon('menu',17)}</button></div>
         </header>
-        <main class="p-3 sm:p-5 md:p-7 safe-bottom max-w-[1600px] mx-auto">${renderPage()}</main>
+        <main class="app-main p-3 sm:p-5 md:p-7 max-w-[1600px] mx-auto">${renderPage()}</main>
       </div>
-      <nav class="md:hidden bottom-dock fixed z-40 bottom-0 inset-x-0 bg-white/95 backdrop-blur border-t border-slate-200 grid grid-cols-4 px-2 pt-2">
+      <nav class="md:hidden bottom-dock fixed z-40 bottom-0 inset-x-0 bg-white/95 backdrop-blur border-t border-slate-200 grid grid-cols-4 px-2">
         ${[{id:'pos',label:'Kasir',icon:'shopping-bag'},{id:'products',label:'Produk',icon:'package'},{id:'reports',label:'Laporan',icon:'chart-no-axes-combined'},{id:'more',label:'Lainnya',icon:'grid-2x2'}].map(n=>`<button data-page="${n.id}" data-action="${n.id==='more'?'more':''}" class="flex flex-col items-center gap-1 py-1 text-[10px] font-extrabold ${state.page===n.id?'text-ink':'text-slate-400'}" ${n.id==='products'&&!canManage()?'disabled':''} ${n.id==='reports'&&!canSeeReports()?'disabled':''}>${icon(n.icon,19)}${n.label}</button>`).join('')}
       </nav>
       ${state.modal ? renderModal() : ''}
@@ -241,8 +243,8 @@
         </section>
         <aside class="hidden lg:block sticky top-[74px]">${renderCartPanel()}</aside>
       </div>
-      <div class="lg:hidden fixed bottom-[68px] inset-x-3 z-30"><button class="btn btn-dark w-full py-3 shadow-hard" data-action="open-cart"><span class="pill bg-lemon text-ink">${cartQty()} item</span><span class="flex-1 text-left">Lihat keranjang</span><span class="mono">${money(cartTotal())}</span>${icon('arrow-up',17)}</button></div>
-      ${state.cartOpen ? `<div class="modal-backdrop" data-action="close-cart"><div class="modal-sheet" data-stop-click><div class="flex justify-between items-center mb-3"><div><h3 class="font-extrabold text-lg">Keranjang belanja</h3><p class="text-xs text-slate-500">${cartQty()} item</p></div><button class="btn p-2" data-action="close-cart">${icon('x',17)}</button></div>${renderCartPanel(true)}</div></div>` : ''}`;
+      <div class="lg:hidden fixed pos-cart-bar inset-x-3 z-30"><button class="btn btn-dark w-full py-3 shadow-hard" data-action="open-cart"><span class="pill bg-lemon text-ink">${cartQty()} item</span><span class="flex-1 text-left">Lihat keranjang</span><span class="mono">${money(cartTotal())}</span>${icon('arrow-up',17)}</button></div>
+      ${state.cartOpen ? `<div class="modal-backdrop" data-cart-backdrop><div class="modal-sheet"><div class="flex justify-between items-center mb-3"><div><h3 class="font-extrabold text-lg">Keranjang belanja</h3><p class="text-xs text-slate-500">${cartQty()} item</p></div><button class="btn p-2" data-action="close-cart">${icon('x',17)}</button></div>${renderCartPanel(true)}</div></div>` : ''}`;
   }
 
   function renderCartPanel(inSheet = false) {
@@ -332,7 +334,7 @@
   function closeModal() { stopCamera(); state.modal = null; render(); }
   function renderModal() {
     if (!state.modal) return '';
-    return `<div class="modal-backdrop" data-action="close-modal"><section class="modal-sheet ${state.modal.wide?'md:max-w-2xl':''}" data-stop-click><div class="flex items-start justify-between gap-3 mb-4"><div><h3 class="text-lg font-extrabold">${esc(state.modal.title)}</h3>${state.modal.subtitle?`<p class="text-xs text-slate-500 mt-1">${esc(state.modal.subtitle)}</p>`:''}</div><button class="btn p-2" data-action="close-modal">${icon('x',17)}</button></div>${state.modal.body}</section></div>`;
+    return `<div class="modal-backdrop" data-modal-backdrop><section class="modal-sheet ${state.modal.wide?'md:max-w-2xl':''}"><div class="flex items-start justify-between gap-3 mb-4"><div><h3 class="text-lg font-extrabold">${esc(state.modal.title)}</h3>${state.modal.subtitle?`<p class="text-xs text-slate-500 mt-1">${esc(state.modal.subtitle)}</p>`:''}</div><button class="btn p-2" data-action="close-modal">${icon('x',17)}</button></div>${state.modal.body}</section></div>`;
   }
   function productForm(p = {}) {
     const categoryOptions = state.catalog.categories.map(c=>`<option value="${esc(c.category_id)}" ${p.category_id===c.category_id?'selected':''}>${esc(c.name)}</option>`).join('');
@@ -393,7 +395,10 @@
     if (state.page==='ai') { const chat=$('#ai-chat'); if(chat) chat.scrollTop=chat.scrollHeight; }
   }
   function handleClick(e) {
-    const stop=e.target.closest('[data-stop-click]'); if(stop && !e.target.closest('[data-action]') && !e.target.closest('[data-page]') && !e.target.closest('[data-add-product]') && !e.target.closest('[data-qty]') && !e.target.closest('[data-ai-prompt]') && !e.target.closest('[data-edit-product]') && !e.target.closest('[data-adjust-stock]') && !e.target.closest('[data-reprint]') && !e.target.closest('[data-resume-held]')) return;
+    const modalBackdrop=e.target.closest('[data-modal-backdrop]');
+    if(modalBackdrop && e.target===modalBackdrop){closeModal();return;}
+    const cartBackdrop=e.target.closest('[data-cart-backdrop]');
+    if(cartBackdrop && e.target===cartBackdrop){state.cartOpen=false;render();return;}
     const pageEl=e.target.closest('[data-page]');
     if(pageEl && pageEl.dataset.page && pageEl.dataset.page!=='more') { e.preventDefault(); goPage(pageEl.dataset.page); return; }
     const cat=e.target.closest('[data-category]'); if(cat){state.category=cat.dataset.category;render();return;}
@@ -491,7 +496,7 @@
           const newUrl=$('#settings-api-url').value.trim();if(!/^https?:\/\//.test(newUrl))throw new Error('URL GAS tidak valid.');state.apiUrl=newUrl;localStorage.setItem(STORAGE.api,newUrl);
           state.settings=await api('settings.save',payload);saveJson(STORAGE.settings,state.settings);render();showToast('Pengaturan disimpan.');break;
         }
-        case 'ai-settings-form': if(data.api_key.trim())localStorage.setItem(STORAGE.geminiKey,data.api_key.trim());else localStorage.removeItem(STORAGE.geminiKey);localStorage.setItem(STORAGE.geminiModel,data.model);closeModal();showToast('Pengaturan AI disimpan di browser.');break;
+        case 'ai-settings-form': {const apiKey=String(data.api_key||'').trim();if(apiKey)localStorage.setItem(STORAGE.geminiKey,apiKey);else localStorage.removeItem(STORAGE.geminiKey);localStorage.setItem(STORAGE.geminiModel,data.model||'gemini-3.5-flash-lite');closeModal();showToast('Pengaturan AI disimpan di browser.');break;}
         case 'ai-chat-form': state.aiMessages.push({role:'user',text:data.question});render();await runAI(data.question);break;
         default: break;
       }
@@ -765,6 +770,7 @@
   async function init() {
     state.customers=readJson('pos_customers',[]);state.history=readJson('pos_history',[]);
     document.addEventListener('keydown',handleHidScanner);
+    document.addEventListener('keydown',e=>{if(e.key==='Escape'){if(state.modal)closeModal();else if(state.cartOpen){state.cartOpen=false;render();}}});
     window.addEventListener('online',()=>{state.online=true;render();syncOutbox();});
     window.addEventListener('offline',()=>{state.online=false;render();showToast('Koneksi terputus. Checkout akan masuk antrean offline.','warning');});
     window.addEventListener('focus',()=>{if(navigator.onLine)syncOutbox();});
